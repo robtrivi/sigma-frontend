@@ -1,35 +1,15 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-
-interface MapCell {
-  id: number;
-  name: string;
-  type: string;
-  classId: string;
-  area: string;
-  color: string;
-  selected: boolean;
-}
-
-interface MonthFilter {
-  id: string;
-  label: string;
-  selected: boolean;
-}
-
-interface ClassType {
-  id: string;
-  label: string;
-  color: string;
-  icon: string;
-  selected: boolean;
-}
+import { MapGridComponent } from './components/map-grid/map-grid.component';
+import { ControlPanelComponent } from './components/control-panel/control-panel.component';
+import { DashboardPanelComponent } from './components/dashboard/dashboard-panel.component';
+import { VisualizationHeaderComponent } from './components/header/visualization-header.component';
+import { ChartBar, ClassDistributionStat, ClassType, MapCell, MonthFilter } from './models/visualization.models';
 
 @Component({
   selector: 'app-visualization-sigma',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, MapGridComponent, ControlPanelComponent, DashboardPanelComponent, VisualizationHeaderComponent],
   templateUrl: './visualization-sigma.component.html',
   styleUrls: ['./visualization-sigma.component.scss']
 })
@@ -79,11 +59,8 @@ export class VisualizationSigmaComponent {
     { id: 20, name: 'Fuente', type: 'Cuerpos de Agua', classId: 'water', area: '312 m²', color: '#4a90e2', selected: false }
   ];
 
-  onFileSelect(event: any): void {
-    const file = event.target.files[0];
-    if (file) {
-      this.uploadedFile = file.name;
-    }
+  onFileSelect(file: File): void {
+    this.uploadedFile = file?.name ?? '';
   }
 
   onCellHover(cell: MapCell): void {
@@ -114,10 +91,6 @@ export class VisualizationSigmaComponent {
       const classType = this.classTypes.find(c => c.id === cell.classId);
       return classType?.selected;
     });
-  }
-
-  getCellClass(cell: MapCell): string {
-    return `map-cell ${cell.classId}`;
   }
 
   getSelectedMonths(): MonthFilter[] {
@@ -186,7 +159,7 @@ export class VisualizationSigmaComponent {
     return Math.round((greenCells / cells.length) * 100) || 0;
   }
 
-  getClassDistribution(): any[] {
+  getClassDistribution(): ClassDistributionStat[] {
     const filteredCells = this.getFilteredCells();
     const totalCells = filteredCells.length || 1;
     
@@ -215,7 +188,7 @@ export class VisualizationSigmaComponent {
     return gradients[classId] || 'linear-gradient(90deg, #4a7c2c, #6ba84a)';
   }
 
-  getChartData(): any[] {
+  getChartData(): ChartBar[] {
     const distribution = this.getClassDistribution();
     return distribution.map(item => ({
       label: item.label.split(' ')[0],

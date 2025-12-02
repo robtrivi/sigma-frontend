@@ -1,0 +1,49 @@
+<aside class="sigma-sidebar">
+  <h2>Panel de Control</h2>
+
+  <div class="section">
+    <div class="section-title">Cargar Imagen Aérea</div>
+    <div class="upload-area" (click)="fileInput.click()">
+      <div class="upload-icon"><i class="pi pi-upload"></i></div>
+      <p>Arrastra aquí tu archivo TIFF</p>
+      <p class="upload-hint">o haz clic para seleccionar</p>
+      <div class="upload-file-name" [class.active]="uploadedFile">{{ uploadedFile || 'Ningún archivo cargado' }}</div>
+    </div>
+    <input #fileInput type="file" accept=".tiff,.tif" (change)="onFileSelect($event)" hidden>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Zona Resaltada</div>
+    <div class="hovered-region" *ngIf="hoveredCell; else hoveredFallback">
+      <strong><i class="pi pi-map-marker"></i> {{ hoveredCell?.name }}</strong>
+      <p><strong>Tipo:</strong> {{ hoveredCell?.type }}</p>
+      <p><strong>Área:</strong> {{ hoveredCell?.area }}</p>
+    </div>
+    <ng-template #hoveredFallback>
+      <div class="hovered-region">
+        <strong><i class="pi pi-map-marker"></i> Pasa mouse sobre una zona</strong>
+        <p>Se mostrarán detalles de la zona aquí en tiempo real.</p>
+      </div>
+    </ng-template>
+  </div>
+
+  <div class="section">
+    <div class="filter-title">Filtro Temporal - Selecciona meses:</div>
+    <div class="filter-group">
+      <div class="checkbox-item" *ngFor="let month of months">
+        <input type="checkbox" [id]="'month-' + month.id" [(ngModel)]="month.selected" (change)="notifyMonthChange()">
+        <label [for]="'month-' + month.id">{{ month.label }}</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="filter-title">Clases Segmentadas:</div>
+    <div class="filter-group">
+      <div class="checkbox-item" *ngFor="let classType of classTypes">
+        <input type="checkbox" [id]="'class-' + classType.id" [(ngModel)]="classType.selected" (change)="notifyClassChange()">
+        <label [for]="'class-' + classType.id">{{ classType.label }}</label>
+      </div>
+    </div>
+  </div>
+</aside>

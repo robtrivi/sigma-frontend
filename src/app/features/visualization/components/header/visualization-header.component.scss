@@ -1,0 +1,53 @@
+.sigma-hero {
+  width: 100%;
+  background: linear-gradient(135deg, #2d5016 0%, #4a7c2c 100%);
+  color: white;
+  padding: 32px 40px;
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 8px 24px rgba(45, 80, 22, 0.2);
+}
+
+.sigma-hero__content {
+  max-width: 960px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.sigma-hero__badge {
+  display: inline-block;
+  background-color: rgba(255, 255, 255, 0.2);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.sigma-hero h1 {
+  font-size: 34px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.sigma-hero__subtitle {
+  font-size: 16px;
+  opacity: 0.95;
+  margin-bottom: 6px;
+}
+
+.sigma-hero__description {
+  font-size: 14px;
+  opacity: 0.85;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .sigma-hero {
+    padding: 24px;
+  }
+
+  .sigma-hero h1 {
+    font-size: 26px;
+  }
+}

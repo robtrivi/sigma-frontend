@@ -1,64 +1,19 @@
-<div class="sigma-container">
-  <div class="sigma-main-layout">
-    <!-- Sidebar -->
-    <aside class="sigma-sidebar">
-      <h2>Panel de Control</h2>
+<div class="sigma-page">
+  <app-visualization-header class="sigma-header"></app-visualization-header>
 
-      <!-- Upload Section -->
-      <div class="section">
-        <div class="section-title">Cargar Imagen Aérea</div>
-        <div class="upload-area" (click)="fileInput.click()">
-          <div class="upload-icon"><i class="pi pi-upload"></i></div>
-          <p>Arrastra aquí tu archivo TIFF</p>
-          <p class="upload-hint">o haz clic para seleccionar</p>
-          <div class="upload-file-name" [class.active]="uploadedFile">{{ uploadedFile || 'Ningún archivo cargado' }}</div>
-        </div>
-        <input #fileInput type="file" accept=".tiff,.tif" (change)="onFileSelect($event)" style="display: none;">
-      </div>
+  <div class="sigma-container">
+    <div class="sigma-main-layout">
+      <app-control-panel
+        [uploadedFile]="uploadedFile"
+        [hoveredCell]="hoveredCell"
+        [months]="months"
+        [classTypes]="classTypes"
+        (fileSelected)="onFileSelect($event)"
+        (monthFilterChange)="onMonthFilterChange()"
+        (classFilterChange)="onClassFilterChange()"
+      ></app-control-panel>
 
-      <!-- Hovered region info -->
-      <div class="section" *ngIf="hoveredCell">
-        <div class="section-title">Zona Resaltada</div>
-        <div class="hovered-region">
-          <strong><i class="pi pi-map-marker"></i> {{ hoveredCell.name }}</strong>
-          <p><strong>Tipo:</strong> {{ hoveredCell.type }}</p>
-          <p><strong>Área:</strong> {{ hoveredCell.area }}</p>
-        </div>
-      </div>
-
-      <div class="section" *ngIf="!hoveredCell">
-        <div class="section-title">Zona Resaltada</div>
-        <div class="hovered-region">
-          <strong><i class="pi pi-map-marker"></i> Pasa mouse sobre una zona</strong>
-          <p>Se mostrarán detalles de la zona aquí en tiempo real.</p>
-        </div>
-      </div>
-
-      <!-- Temporal Filter -->
-      <div class="section">
-        <div class="filter-title">Filtro Temporal - Selecciona meses:</div>
-        <div class="filter-group">
-          <div class="checkbox-item" *ngFor="let month of months">
-            <input type="checkbox" [id]="'month-' + month.id" [(ngModel)]="month.selected" (change)="onMonthFilterChange()">
-            <label [for]="'month-' + month.id">{{ month.label }}</label>
-          </div>
-        </div>
-      </div>
-
-      <!-- Classes Filter -->
-      <div class="section">
-        <div class="filter-title">Clases Segmentadas:</div>
-        <div class="filter-group">
-          <div class="checkbox-item" *ngFor="let classType of classTypes">
-            <input type="checkbox" [id]="'class-' + classType.id" [(ngModel)]="classType.selected" (change)="onClassFilterChange()">
-            <label [for]="'class-' + classType.id">{{ classType.label }}</label>
-          </div>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="sigma-main-content">
+      <main class="sigma-main-content">
       <div class="status-bar">
         <span>{{ getStatusMessage() }}</span>
       </div>
@@ -74,83 +29,25 @@
       </div>
 
       <div class="content-wrapper">
-        <!-- Map Section -->
-        <div class="map-section">
-          <div class="map-area">
-            <div class="map-visualization">
-              <div class="map-cell" 
-                   *ngFor="let cell of getFilteredCells()" 
-                   [class]="getCellClass(cell)"
-                   [class.selected]="cell.selected"
-                   (mouseenter)="onCellHover(cell)"
-                   (mouseleave)="onCellLeave()"
-                   (click)="onCellClick(cell)">
-                <div class="map-label">{{ cell.name }}</div>
-              </div>
-            </div>
+        <app-map-grid
+          [cells]="getFilteredCells()"
+          [classTypes]="classTypes"
+          [hoveredCell]="hoveredCell"
+          (cellHover)="onCellHover($event)"
+          (cellLeave)="onCellLeave()"
+          (cellSelect)="onCellClick($event)"
+        ></app-map-grid>
 
-            <!-- Legend -->
-            <div class="legend-box">
-              <div class="legend-header">Leyenda</div>
-              <div class="legend-item" *ngFor="let classType of classTypes">
-                <div class="legend-color" [style.background-color]="classType.color"></div>
-                <span [class.disabled]="!classType.selected">{{ classType.label }}</span>
-              </div>
-            </div>
-
-            <!-- Info box that shows on hover -->
-            <div class="info-box" [class.visible]="hoveredCell">
-              <div class="info-box-title">{{ hoveredCell?.name || 'Zona' }}</div>
-              <div class="info-box-stat"><strong>Tipo:</strong> <span>{{ hoveredCell?.type || '-' }}</span></div>
-              <div class="info-box-stat"><strong>Área:</strong> <span>{{ hoveredCell?.area || '-' }}</span></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Dashboard Section -->
-        <div class="dashboard-section">
-          <!-- Overview Card -->
-          <div class="dashboard-card">
-            <div class="dashboard-card-title"><i class="pi pi-chart-bar"></i> {{ getDashboardTitle() }}</div>
-            <div class="card-stat">
-              <span class="stat-label">{{ getStatLabel() }}:</span>
-              <span class="stat-value large">{{ getVisibleCellsCount() }}</span>
-            </div>
-            <div class="card-stat">
-              <span class="stat-label">Total de celdas:</span>
-              <span class="stat-value">20</span>
-            </div>
-            <div class="card-stat">
-              <span class="stat-label">{{ getCoverageLabel() }}:</span>
-              <span class="stat-value">{{ getCoveragePercentage() }}%</span>
-            </div>
-          </div>
-
-          <!-- Class Distribution Card -->
-          <div class="dashboard-card">
-            <div class="dashboard-card-title"><i class="pi pi-th-large"></i> Distribución por Clase</div>
-            <div *ngFor="let stat of getClassDistribution()">
-              <div class="card-stat">
-                <span class="stat-label"><i class="pi {{ stat.icon }}"></i> {{ stat.label }}</span>
-                <span class="stat-value">{{ stat.percentage }}%</span>
-              </div>
-              <div class="progress-bar">
-                <div class="progress-fill" [style.width.%]="stat.percentage" [style.background]="stat.gradient"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Statistics Card -->
-          <div class="dashboard-card">
-            <div class="dashboard-card-title"><i class="pi pi-chart-line"></i> Estadísticas Detalladas</div>
-            <div class="chart-container">
-              <div class="chart-bar" *ngFor="let bar of getChartData()">
-                <div class="bar" [style.height.%]="bar.height" [style.background]="bar.gradient"></div>
-                <div class="bar-label">{{ bar.label }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <app-dashboard-panel
+          [dashboardTitle]="getDashboardTitle()"
+          [statLabel]="getStatLabel()"
+          [visibleCellsCount]="getVisibleCellsCount()"
+          [totalCells]="20"
+          [coverageLabel]="getCoverageLabel()"
+          [coveragePercentage]="getCoveragePercentage()"
+          [classDistribution]="getClassDistribution()"
+          [chartData]="getChartData()"
+        ></app-dashboard-panel>
       </div>
 
       <div class="bottom-toolbar">
@@ -162,6 +59,7 @@
           <button class="btn-primary" (click)="downloadReport()">Descargar Informe</button>
         </div>
       </div>
-    </main>
+      </main>
+    </div>
   </div>
 </div>

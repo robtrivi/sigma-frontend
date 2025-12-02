@@ -1,0 +1,40 @@
+<div class="dashboard-section">
+  <div class="dashboard-card">
+    <div class="dashboard-card-title"><i class="pi pi-chart-bar"></i> {{ dashboardTitle }}</div>
+    <div class="card-stat">
+      <span class="stat-label">{{ statLabel }}:</span>
+      <span class="stat-value large">{{ visibleCellsCount }}</span>
+    </div>
+    <div class="card-stat">
+      <span class="stat-label">Total de celdas:</span>
+      <span class="stat-value">{{ totalCells }}</span>
+    </div>
+    <div class="card-stat">
+      <span class="stat-label">{{ coverageLabel }}:</span>
+      <span class="stat-value">{{ coveragePercentage }}%</span>
+    </div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-title"><i class="pi pi-th-large"></i> Distribución por Clase</div>
+    <div *ngFor="let stat of classDistribution">
+      <div class="card-stat">
+        <span class="stat-label"><i class="pi {{ stat.icon }}"></i> {{ stat.label }}</span>
+        <span class="stat-value">{{ stat.percentage }}%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" [style.width.%]="stat.percentage" [style.background]="stat.gradient"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-card">
+    <div class="dashboard-card-title"><i class="pi pi-chart-line"></i> Estadísticas Detalladas</div>
+    <div class="chart-container">
+      <div class="chart-bar" *ngFor="let bar of chartData">
+        <div class="bar" [style.height.%]="bar.height" [style.background]="bar.gradient"></div>
+        <div class="bar-label">{{ bar.label }}</div>
+      </div>
+    </div>
+  </div>
+</div>

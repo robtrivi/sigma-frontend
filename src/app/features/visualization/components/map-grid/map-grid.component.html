@@ -1,0 +1,30 @@
+<div class="map-section">
+  <div class="map-area">
+    <div class="map-visualization">
+      <div
+        class="map-cell"
+        *ngFor="let cell of cells; trackBy: trackByCellId"
+        [ngClass]="[cell.classId, { selected: cell.selected }]"
+        (mouseenter)="cellHover.emit(cell)"
+        (mouseleave)="cellLeave.emit()"
+        (click)="cellSelect.emit(cell)"
+      >
+        <div class="map-label">{{ cell.name }}</div>
+      </div>
+    </div>
+
+    <div class="legend-box">
+      <div class="legend-header">Leyenda</div>
+      <div class="legend-item" *ngFor="let classType of classTypes">
+        <div class="legend-color" [style.background-color]="classType.color"></div>
+        <span [class.disabled]="!classType.selected">{{ classType.label }}</span>
+      </div>
+    </div>
+
+    <div class="info-box" [class.visible]="hoveredCell">
+      <div class="info-box-title">{{ hoveredCell?.name || 'Zona' }}</div>
+      <div class="info-box-stat"><strong>Tipo:</strong> <span>{{ hoveredCell?.type || '-' }}</span></div>
+      <div class="info-box-stat"><strong>Área:</strong> <span>{{ hoveredCell?.area || '-' }}</span></div>
+    </div>
+  </div>
+</div>
