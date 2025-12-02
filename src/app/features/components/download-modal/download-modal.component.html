@@ -1,0 +1,203 @@
+<div class="modal-overlay">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <!-- Modal Header -->
+    <div class="modal-header">
+      <h2>📥 Descargar Informe</h2>
+      <button class="modal-close" (click)="closeModal()" aria-label="Cerrar modal">✕</button>
+    </div>
+
+    <!-- Modal Content -->
+    <div class="modal-content">
+      <!-- Paso 1: Formato del archivo -->
+      <div class="modal-section">
+        <div class="modal-section-title">Paso 1: Selecciona el formato del archivo</div>
+        
+        <div class="format-selection">
+          <!-- PDF Option -->
+          <label class="format-option" [class.selected]="selectedFormat === 'pdf'">
+            <input 
+              type="radio" 
+              class="radio-input"
+              name="format"
+              value="pdf"
+              [checked]="selectedFormat === 'pdf'"
+              (change)="onFormatChange('pdf')"
+            >
+            <div class="format-icon">📄</div>
+            <div class="format-name">PDF</div>
+            <div class="format-desc">Informe formateado con gráficos</div>
+          </label>
+
+          <!-- CSV Option -->
+          <label class="format-option" [class.selected]="selectedFormat === 'csv'">
+            <input 
+              type="radio" 
+              class="radio-input"
+              name="format"
+              value="csv"
+              [checked]="selectedFormat === 'csv'"
+              (change)="onFormatChange('csv')"
+            >
+            <div class="format-icon">📊</div>
+            <div class="format-name">CSV</div>
+            <div class="format-desc">Datos tabulares para análisis</div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Paso 2: Región/Área de Interés -->
+      <div class="modal-section">
+        <div class="modal-section-title">Paso 2: Selecciona el área a incluir</div>
+        
+        <div class="region-selection">
+          <div class="region-selection-title">🎯 Área de Interés:</div>
+          
+          <div class="region-option">
+            <input 
+              type="radio" 
+              id="regionFull"
+              name="region"
+              value="full"
+              [checked]="selectedRegion === 'full'"
+              (change)="onRegionChange('full')"
+            >
+            <label for="regionFull">Campus completo (todas las 20 celdas)</label>
+          </div>
+
+          <div class="region-option">
+            <input 
+              type="radio" 
+              id="regionSubregion"
+              name="region"
+              value="subregion"
+              [checked]="selectedRegion === 'subregion'"
+              (change)="onRegionChange('subregion')"
+            >
+            <label for="regionSubregion">Subregión personalizada</label>
+          </div>
+
+          <div class="region-option">
+            <input 
+              type="radio" 
+              id="regionGreenOnly"
+              name="region"
+              value="green-only"
+              [checked]="selectedRegion === 'green-only'"
+              (change)="onRegionChange('green-only')"
+            >
+            <label for="regionGreenOnly">Solo Áreas Verdes (7 celdas)</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paso 3: Contenido del informe -->
+      <div class="modal-section">
+        <div class="modal-section-title">Paso 3: Selecciona el contenido a incluir</div>
+        
+        <p class="modal-section-desc">Especifica qué elementos deseas que aparezcan en tu informe:</p>
+        
+        <div class="content-selection">
+          <!-- Mapa Segmentado -->
+          <div class="content-option">
+            <input 
+              type="checkbox" 
+              id="contentMap"
+              [checked]="selectedContent['map']"
+              (change)="onContentToggle('map')"
+            >
+            <label for="contentMap" class="content-label">
+              <span class="content-label-title">🗺️ Mapa Segmentado</span>
+              <span class="content-label-desc">Visualización de las clases identificadas en el campus</span>
+            </label>
+          </div>
+
+          <!-- Estadísticas de Cobertura -->
+          <div class="content-option">
+            <input 
+              type="checkbox" 
+              id="contentStats"
+              [checked]="selectedContent['stats']"
+              (change)="onContentToggle('stats')"
+            >
+            <label for="contentStats" class="content-label">
+              <span class="content-label-title">📈 Estadísticas de Cobertura</span>
+              <span class="content-label-desc">Porcentajes y áreas totales por clase identificada</span>
+            </label>
+          </div>
+
+          <!-- Leyenda de Clases -->
+          <div class="content-option">
+            <input 
+              type="checkbox" 
+              id="contentClasses"
+              [checked]="selectedContent['classes']"
+              (change)="onContentToggle('classes')"
+            >
+            <label for="contentClasses" class="content-label">
+              <span class="content-label-title">🏷️ Leyenda de Clases</span>
+              <span class="content-label-desc">Descripción de cada tipo de clase segmentada</span>
+            </label>
+          </div>
+
+          <!-- Metadatos Técnicos -->
+          <div class="content-option">
+            <input 
+              type="checkbox" 
+              id="contentMetadata"
+              [checked]="selectedContent['metadata']"
+              (change)="onContentToggle('metadata')"
+            >
+            <label for="contentMetadata" class="content-label">
+              <span class="content-label-title">⚙️ Metadatos Técnicos</span>
+              <span class="content-label-desc">Fecha de captura, resolución, filtros aplicados</span>
+            </label>
+          </div>
+
+          <!-- Análisis Comparativo -->
+          <div class="content-option">
+            <input 
+              type="checkbox" 
+              id="contentComparison"
+              [checked]="selectedContent['comparison']"
+              (change)="onContentToggle('comparison')"
+            >
+            <label for="contentComparison" class="content-label">
+              <span class="content-label-title">📊 Análisis Comparativo</span>
+              <span class="content-label-desc">Comparación temporal de cambios detectados</span>
+            </label>
+          </div>
+
+          <!-- Recomendaciones -->
+          <div class="content-option">
+            <input 
+              type="checkbox" 
+              id="contentRecommendations"
+              [checked]="selectedContent['recommendations']"
+              (change)="onContentToggle('recommendations')"
+            >
+            <label for="contentRecommendations" class="content-label">
+              <span class="content-label-title">💡 Recomendaciones</span>
+              <span class="content-label-desc">Sugerencias basadas en el análisis de áreas verdes</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resumen del Informe -->
+      <div class="modal-summary">
+        <strong>📋 Resumen del Informe:</strong><br>
+        Formato: <strong>{{ getFormatLabel() }}</strong> | 
+        Área: <strong>{{ getRegionLabel() }}</strong> | 
+        Elementos: <strong>{{ getSelectedContentCount() }} seleccionados</strong> | 
+        Tamaño estimado: <strong>{{ getEstimatedSize() }}</strong>
+      </div>
+    </div>
+
+    <!-- Modal Footer -->
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeModal()">Cancelar</button>
+      <button class="btn-primary" (click)="onDownload()">Descargar Informe</button>
+    </div>
+  </div>
+</div>
+

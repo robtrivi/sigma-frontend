@@ -18,6 +18,8 @@ export class MapGridComponent {
   @Output() cellLeave = new EventEmitter<void>();
   @Output() cellSelect = new EventEmitter<MapCell>();
 
+  infoBoxStyle: { [key: string]: string } = {};
+
   trackByCellId(_: number, cell: MapCell): number {
     return cell.id;
   }
@@ -27,5 +29,34 @@ export class MapGridComponent {
       [cell.classId]: true,
       selected: cell.selected
     };
+  }
+
+  onMapMouseMove(event: MouseEvent): void {
+    if (this.hoveredCell) {
+      const mapArea = (event.target as HTMLElement).closest('.map-area') as HTMLElement;
+      if (mapArea) {
+        const rect = mapArea.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        // Posicionar el info-box cerca del cursor, con offset
+        let posX = x + 15;
+        let posY = y - 50;
+
+        // Ajustar si se sale de los bordes
+        if (posX + 250 > rect.width) {
+          posX = x - 265;
+        }
+        if (posY < 0) {
+          posY = y + 15;
+        }
+
+        this.infoBoxStyle = {
+          left: `${Math.max(0, posX)}px`,
+          top: `${Math.max(0, posY)}px`,
+          position: 'absolute'
+        };
+      }
+    }
   }
 }

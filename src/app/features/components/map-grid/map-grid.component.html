@@ -1,5 +1,5 @@
 <div class="map-section">
-  <div class="map-area">
+  <div class="map-area" (mousemove)="onMapMouseMove($event)">
     <div class="map-visualization">
       <div
         class="map-cell"
@@ -21,7 +21,7 @@
       </div>
     </div>
 
-    <div class="info-box" [class.visible]="hoveredCell">
+    <div class="info-box" [class.visible]="hoveredCell" [ngStyle]="infoBoxStyle">
       <div class="info-box-title">{{ hoveredCell?.name || 'Zona' }}</div>
       <div class="info-box-stat"><strong>Tipo:</strong> <span>{{ hoveredCell?.type || '-' }}</span></div>
       <div class="info-box-stat"><strong>Área:</strong> <span>{{ hoveredCell?.area || '-' }}</span></div>

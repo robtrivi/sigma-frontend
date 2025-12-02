@@ -1,15 +1,18 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MapGridComponent } from './components/map-grid/map-grid.component';
-import { ControlPanelComponent } from './components/control-panel/control-panel.component';
-import { DashboardPanelComponent } from './components/dashboard/dashboard-panel.component';
-import { VisualizationHeaderComponent } from './components/header/visualization-header.component';
-import { ChartBar, ClassDistributionStat, ClassType, MapCell, MonthFilter } from './models/visualization.models';
+import { RouterLink } from '@angular/router';
+import { MapGridComponent } from '../components/map-grid/map-grid.component';
+import { ControlPanelComponent } from '../components/control-panel/control-panel.component';
+import { DashboardPanelComponent } from '../components/dashboard/dashboard-panel.component';
+import { VisualizationHeaderComponent } from '../components/header/visualization-header.component';
+import { DownloadModalComponent } from '../components/download-modal/download-modal.component';
+import { ChartBar, ClassDistributionStat, ClassType, MapCell, MonthFilter } from '../models/visualization.models';
+import { ReportGeneratorService } from '../services/report-generator.service';
 
 @Component({
   selector: 'app-visualization-sigma',
   standalone: true,
-  imports: [CommonModule, MapGridComponent, ControlPanelComponent, DashboardPanelComponent, VisualizationHeaderComponent],
+  imports: [CommonModule, RouterLink, MapGridComponent, ControlPanelComponent, DashboardPanelComponent, VisualizationHeaderComponent, DownloadModalComponent],
   templateUrl: './visualization-sigma.component.html',
   styleUrls: ['./visualization-sigma.component.scss']
 })
@@ -17,6 +20,9 @@ export class VisualizationSigmaComponent {
   uploadedFile: string = '';
   hoveredCell: MapCell | null = null;
   activeMonth: string = 'octubre';
+  showDownloadModal: boolean = false;
+
+  constructor(private reportGenerator: ReportGeneratorService) {}
 
   months: MonthFilter[] = [
     { id: 'agosto', label: 'Agosto 2025', selected: false },
@@ -209,8 +215,14 @@ export class VisualizationSigmaComponent {
       return `Período: ${labels} 2025 | Comparación de ${selectedMonths.length} mapas`;
     }
     
-    const visibleCells = this.getFilteredCells().length;
-    return `Mapa segmentado: ${selectedMonths[0]?.label || 'Octubre 2025'} | ${visibleCells} celdas visibles`;
+    // Mensaje para un único mes seleccionado
+    const activeMonthLabel = selectedMonths[0]?.label || 'Octubre 2025';
+    const filteredCells = this.getFilteredCells();
+    const totalCells = this.mapCells.length;
+    const greenCells = filteredCells.filter(c => c.classId === 'green').length;
+    const greenPercentage = totalCells > 0 ? Math.round((greenCells / totalCells) * 100) : 0;
+    
+    return `Mapa segmentado: ${activeMonthLabel} | Total de celdas: ${totalCells} | Áreas verdes: ${greenCells} celdas (${greenPercentage}%)`;
   }
 
   clearFilters(): void {
@@ -219,6 +231,25 @@ export class VisualizationSigmaComponent {
   }
 
   downloadReport(): void {
-    alert('Modal de descarga de informe - Funcionalidad simulada');
+    this.showDownloadModal = true;
+  }
+
+  onDownloadModalClose(): void {
+    this.showDownloadModal = false;
+  }
+
+  onDownloadModalSubmit(data: { format: string; content: string[]; region: string }): void {
+    const activeMonthLabel = this.getSelectedMonths()[0]?.label || 'Octubre 2025';
+    const filteredCells = this.getFilteredCells();
+
+    this.reportGenerator.generateReport({
+      format: data.format as 'pdf' | 'csv',
+      content: data.content,
+      region: data.region as 'full' | 'subregion' | 'green-only',
+      cells: filteredCells,
+      monthLabel: activeMonthLabel
+    });
+
+    // El modal se mantiene abierto para que el usuario pueda descargar múltiples veces si lo desea
   }
 }

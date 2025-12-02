@@ -55,6 +55,7 @@
           {{ getToolbarInfo() }}
         </div>
         <div class="toolbar-buttons">
+          <button class="btn-secondary" [routerLink]="['/']">Volver al Inicio</button>
           <button class="btn-secondary" (click)="clearFilters()">Limpiar Filtros</button>
           <button class="btn-primary" (click)="downloadReport()">Descargar Informe</button>
         </div>
@@ -62,4 +63,11 @@
       </main>
     </div>
   </div>
+
+  <!-- Download Modal -->
+  <app-download-modal 
+    *ngIf="showDownloadModal"
+    (close)="onDownloadModalClose()"
+    (download)="onDownloadModalSubmit($event)"
+  ></app-download-modal>
 </div>
