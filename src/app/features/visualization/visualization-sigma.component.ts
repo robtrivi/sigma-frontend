@@ -45,11 +45,11 @@ export class VisualizationSigmaComponent {
   ];
 
   classTypes: ClassType[] = [
-    { id: 'green', label: 'Áreas Verdes', color: '#4a7c2c', icon: '🌿', selected: true },
-    { id: 'building', label: 'Edificios', color: '#8b7355', icon: '🏗️', selected: true },
-    { id: 'street', label: 'Calles', color: '#808080', icon: '🛣️', selected: true },
-    { id: 'parking', label: 'Parqueaderos', color: '#a9a9a9', icon: '🅿️', selected: true },
-    { id: 'water', label: 'Cuerpos de Agua', color: '#4a90e2', icon: '💧', selected: true }
+    { id: 'green', label: 'Áreas Verdes', color: '#4a7c2c', icon: 'pi-sun', selected: true },
+    { id: 'building', label: 'Edificios', color: '#8b7355', icon: 'pi-building', selected: true },
+    { id: 'street', label: 'Calles', color: '#808080', icon: 'pi-minus', selected: true },
+    { id: 'parking', label: 'Parqueaderos', color: '#a9a9a9', icon: 'pi-car', selected: true },
+    { id: 'water', label: 'Cuerpos de Agua', color: '#4a90e2', icon: 'pi-inbox', selected: true }
   ];
 
   mapCells: MapCell[] = [
@@ -132,9 +132,9 @@ export class VisualizationSigmaComponent {
     const selectedMonths = this.getSelectedMonths();
     if (selectedMonths.length > 1) {
       const labels = selectedMonths.map(m => m.label.split(' ')[0]).join(', ');
-      return `📅 Filtro temporal activo: ${labels} 2025`;
+      return `Filtro temporal activo: ${labels} 2025`;
     } else if (selectedMonths.length === 1) {
-      return '✓ Mapa segmentado listo para visualizar';
+      return 'Mapa segmentado listo para visualizar';
     }
     return 'Estado: Esperando carga de imagen';
   }

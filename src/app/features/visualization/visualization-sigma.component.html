@@ -8,7 +8,7 @@
       <div class="section">
         <div class="section-title">Cargar Imagen Aérea</div>
         <div class="upload-area" (click)="fileInput.click()">
-          <div class="upload-icon">📤</div>
+          <div class="upload-icon"><i class="pi pi-upload"></i></div>
           <p>Arrastra aquí tu archivo TIFF</p>
           <p class="upload-hint">o haz clic para seleccionar</p>
           <div class="upload-file-name" [class.active]="uploadedFile">{{ uploadedFile || 'Ningún archivo cargado' }}</div>
@@ -20,7 +20,7 @@
       <div class="section" *ngIf="hoveredCell">
         <div class="section-title">Zona Resaltada</div>
         <div class="hovered-region">
-          <strong>🎯 {{ hoveredCell.name }}</strong>
+          <strong><i class="pi pi-map-marker"></i> {{ hoveredCell.name }}</strong>
           <p><strong>Tipo:</strong> {{ hoveredCell.type }}</p>
           <p><strong>Área:</strong> {{ hoveredCell.area }}</p>
         </div>
@@ -29,7 +29,7 @@
       <div class="section" *ngIf="!hoveredCell">
         <div class="section-title">Zona Resaltada</div>
         <div class="hovered-region">
-          <strong>🎯 Pasa mouse sobre una zona</strong>
+          <strong><i class="pi pi-map-marker"></i> Pasa mouse sobre una zona</strong>
           <p>Se mostrarán detalles de la zona aquí en tiempo real.</p>
         </div>
       </div>
@@ -69,7 +69,7 @@
              *ngFor="let month of getSelectedMonths()" 
              [class.active]="activeMonth === month.id"
              (click)="setActiveMonth(month.id)">
-          📍 {{ month.label }}
+          <i class="pi pi-calendar"></i> {{ month.label }}
         </div>
       </div>
 
@@ -111,7 +111,7 @@
         <div class="dashboard-section">
           <!-- Overview Card -->
           <div class="dashboard-card">
-            <div class="dashboard-card-title">📊 {{ getDashboardTitle() }}</div>
+            <div class="dashboard-card-title"><i class="pi pi-chart-bar"></i> {{ getDashboardTitle() }}</div>
             <div class="card-stat">
               <span class="stat-label">{{ getStatLabel() }}:</span>
               <span class="stat-value large">{{ getVisibleCellsCount() }}</span>
@@ -128,10 +128,10 @@
 
           <!-- Class Distribution Card -->
           <div class="dashboard-card">
-            <div class="dashboard-card-title">🎯 Distribución por Clase</div>
+            <div class="dashboard-card-title"><i class="pi pi-th-large"></i> Distribución por Clase</div>
             <div *ngFor="let stat of getClassDistribution()">
               <div class="card-stat">
-                <span class="stat-label">{{ stat.icon }} {{ stat.label }}</span>
+                <span class="stat-label"><i class="pi {{ stat.icon }}"></i> {{ stat.label }}</span>
                 <span class="stat-value">{{ stat.percentage }}%</span>
               </div>
               <div class="progress-bar">
@@ -142,7 +142,7 @@
 
           <!-- Statistics Card -->
           <div class="dashboard-card">
-            <div class="dashboard-card-title">📈 Estadísticas Detalladas</div>
+            <div class="dashboard-card-title"><i class="pi pi-chart-line"></i> Estadísticas Detalladas</div>
             <div class="chart-container">
               <div class="chart-bar" *ngFor="let bar of getChartData()">
                 <div class="bar" [style.height.%]="bar.height" [style.background]="bar.gradient"></div>
