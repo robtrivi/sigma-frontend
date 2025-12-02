@@ -9,8 +9,8 @@ import { Component, Input } from '@angular/core';
   styleUrls: ['./visualization-header.component.scss']
 })
 export class VisualizationHeaderComponent {
-  @Input() title: string = '🌱 SIGMA v2 - Prototipo';
+  @Input() title: string = 'SIGMA';
   @Input() subtitle: string = 'Sistema Integrado de Gestión y Monitoreo de Áreas Verdes';
-  @Input() description: string = 'Pantallas dinámicas con filtros, dashboards y reportes listos para análisis geoespacial';
-  @Input() badge: string = 'Actualización diciembre 2025';
+  @Input() description: string = 'Explorador geoespacial con filtros, tableros y reportes listos para decisión.';
+  @Input() badge: string = 'Panel operativo';
 }

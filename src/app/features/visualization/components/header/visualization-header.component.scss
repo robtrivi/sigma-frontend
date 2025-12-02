@@ -1,53 +1,77 @@
 .sigma-hero {
   width: 100%;
-  background: linear-gradient(135deg, #2d5016 0%, #4a7c2c 100%);
+  background: linear-gradient(135deg, #1e2e1a 0%, #3a5b20 100%);
   color: white;
-  padding: 32px 40px;
-  border-radius: 0 0 16px 16px;
-  box-shadow: 0 8px 24px rgba(45, 80, 22, 0.2);
+  padding: 20px 28px;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 4px 18px rgba(30, 46, 26, 0.4);
 }
 
 .sigma-hero__content {
-  max-width: 960px;
-  margin: 0 auto;
-  text-align: center;
+  max-width: none;
+  margin: 0;
+  text-align: left;
 }
 
-.sigma-hero__badge {
-  display: inline-block;
-  background-color: rgba(255, 255, 255, 0.2);
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+.sigma-hero__heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
+.sigma-hero__logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sigma-hero__logo svg {
+  width: 28px;
+  height: 28px;
+  fill: #d3f88c;
+}
+
+.sigma-hero__badge {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .sigma-hero h1 {
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 700;
-  margin-bottom: 10px;
+  margin: 2px 0 0;
 }
 
 .sigma-hero__subtitle {
-  font-size: 16px;
-  opacity: 0.95;
-  margin-bottom: 6px;
+  font-size: 14px;
+  opacity: 0.9;
+  margin-bottom: 4px;
 }
 
 .sigma-hero__description {
-  font-size: 14px;
-  opacity: 0.85;
-  font-style: italic;
+  font-size: 13px;
+  opacity: 0.75;
 }
 
 @media (max-width: 768px) {
   .sigma-hero {
-    padding: 24px;
+    padding: 18px;
+  }
+
+  .sigma-hero__heading {
+    align-items: flex-start;
   }
 
   .sigma-hero h1 {
-    font-size: 26px;
+    font-size: 24px;
   }
 }
