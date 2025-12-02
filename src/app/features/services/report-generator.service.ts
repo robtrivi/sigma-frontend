@@ -105,7 +105,7 @@ export class ReportGeneratorService {
       </head>
       <body>
         <header>
-          <h1>🌱 SIGMA - Informe de Análisis</h1>
+          <h1>SIGMA - Informe de Análisis</h1>
           <p class="subtitle">Sistema Integrado de Gestión y Monitoreo de Áreas Verdes - ESPOL</p>
         </header>
     `;
@@ -114,7 +114,7 @@ export class ReportGeneratorService {
     if (options.content.includes('map') || options.content.includes('stats') || options.content.includes('classes')) {
       content += `
         <div class="section">
-          <div class="section-title">📋 Resumen Ejecutivo</div>
+          <div class="section-title">Resumen Ejecutivo</div>
           <p>Análisis de segmentación de áreas del Campus ESPOL correspondiente a: <strong>${monthLabel}</strong></p>
           <p style="margin-top: 10px;">Este informe presenta un análisis detallado de la distribución de áreas verdes, edificios, calles y otros elementos identificados en el campus. Los datos permiten evaluar el estado de la infraestructura verde y su relación con otras áreas del terreno.</p>
         </div>
@@ -126,7 +126,7 @@ export class ReportGeneratorService {
       const stats = this.calculateStatistics(cells);
       content += `
         <div class="section">
-          <div class="section-title">📈 Estadísticas de Cobertura</div>
+          <div class="section-title">Estadísticas de Cobertura</div>
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-label">Total de Celdas</div>
@@ -154,7 +154,7 @@ export class ReportGeneratorService {
       const distribution = this.getClassDistribution(cells);
       content += `
         <div class="section">
-          <div class="section-title">🏷️ Leyenda de Clases</div>
+          <div class="section-title">Leyenda de Clases</div>
           <table>
             <thead>
               <tr>
@@ -190,7 +190,7 @@ export class ReportGeneratorService {
     if (options.content.includes('map')) {
       content += `
         <div class="section">
-          <div class="section-title">🗺️ Mapa Segmentado</div>
+          <div class="section-title">Mapa Segmentado</div>
           <table>
             <thead>
               <tr>
@@ -225,7 +225,7 @@ export class ReportGeneratorService {
     if (options.content.includes('metadata')) {
       content += `
         <div class="section">
-          <div class="section-title">⚙️ Metadatos Técnicos</div>
+          <div class="section-title">Metadatos Técnicos</div>
           <table>
             <tr>
               <td style="font-weight: 600; width: 30%;">Fecha de Captura</td>
@@ -256,7 +256,7 @@ export class ReportGeneratorService {
     if (options.content.includes('comparison')) {
       content += `
         <div class="section">
-          <div class="section-title">📊 Análisis Comparativo</div>
+          <div class="section-title">Análisis Comparativo</div>
           <p style="margin-bottom: 15px;"><strong>Comparación Temporal de Áreas Verdes:</strong></p>
           <div class="trend-item">
             <strong>Período Anterior (Septiembre 2025):</strong><br>
@@ -278,7 +278,7 @@ export class ReportGeneratorService {
     if (options.content.includes('recommendations')) {
       content += `
         <div class="section">
-          <div class="section-title">💡 Recomendaciones</div>
+          <div class="section-title">Recomendaciones</div>
           <p style="margin-bottom: 15px;">Basado en el análisis actual, se sugieren las siguientes acciones para optimizar la gestión de áreas verdes:</p>
           
           <div class="recommendation-item">

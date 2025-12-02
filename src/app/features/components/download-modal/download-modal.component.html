@@ -2,8 +2,8 @@
   <div class="modal" (click)="$event.stopPropagation()">
     <!-- Modal Header -->
     <div class="modal-header">
-      <h2>📥 Descargar Informe</h2>
-      <button class="modal-close" (click)="closeModal()" aria-label="Cerrar modal">✕</button>
+      <h2><i class="pi pi-download"></i> Descargar Informe</h2>
+      <button class="modal-close" (click)="closeModal()" aria-label="Cerrar modal"><i class="pi pi-times"></i></button>
     </div>
 
     <!-- Modal Content -->
@@ -23,7 +23,7 @@
               [checked]="selectedFormat === 'pdf'"
               (change)="onFormatChange('pdf')"
             >
-            <div class="format-icon">📄</div>
+            <div class="format-icon"><i class="pi pi-file-pdf"></i></div>
             <div class="format-name">PDF</div>
             <div class="format-desc">Informe formateado con gráficos</div>
           </label>
@@ -38,7 +38,7 @@
               [checked]="selectedFormat === 'csv'"
               (change)="onFormatChange('csv')"
             >
-            <div class="format-icon">📊</div>
+            <div class="format-icon"><i class="pi pi-table"></i></div>
             <div class="format-name">CSV</div>
             <div class="format-desc">Datos tabulares para análisis</div>
           </label>
@@ -50,7 +50,7 @@
         <div class="modal-section-title">Paso 2: Selecciona el área a incluir</div>
         
         <div class="region-selection">
-          <div class="region-selection-title">🎯 Área de Interés:</div>
+          <div class="region-selection-title"><i class="pi pi-bullseye"></i> Área de Interés:</div>
           
           <div class="region-option">
             <input 
@@ -106,7 +106,7 @@
               (change)="onContentToggle('map')"
             >
             <label for="contentMap" class="content-label">
-              <span class="content-label-title">🗺️ Mapa Segmentado</span>
+              <span class="content-label-title"><i class="pi pi-map"></i> Mapa Segmentado</span>
               <span class="content-label-desc">Visualización de las clases identificadas en el campus</span>
             </label>
           </div>
@@ -120,7 +120,7 @@
               (change)="onContentToggle('stats')"
             >
             <label for="contentStats" class="content-label">
-              <span class="content-label-title">📈 Estadísticas de Cobertura</span>
+              <span class="content-label-title"><i class="pi pi-chart-line"></i> Estadísticas de Cobertura</span>
               <span class="content-label-desc">Porcentajes y áreas totales por clase identificada</span>
             </label>
           </div>
@@ -134,7 +134,7 @@
               (change)="onContentToggle('classes')"
             >
             <label for="contentClasses" class="content-label">
-              <span class="content-label-title">🏷️ Leyenda de Clases</span>
+              <span class="content-label-title"><i class="pi pi-tags"></i> Leyenda de Clases</span>
               <span class="content-label-desc">Descripción de cada tipo de clase segmentada</span>
             </label>
           </div>
@@ -148,7 +148,7 @@
               (change)="onContentToggle('metadata')"
             >
             <label for="contentMetadata" class="content-label">
-              <span class="content-label-title">⚙️ Metadatos Técnicos</span>
+              <span class="content-label-title"><i class="pi pi-cog"></i> Metadatos Técnicos</span>
               <span class="content-label-desc">Fecha de captura, resolución, filtros aplicados</span>
             </label>
           </div>
@@ -162,7 +162,7 @@
               (change)="onContentToggle('comparison')"
             >
             <label for="contentComparison" class="content-label">
-              <span class="content-label-title">📊 Análisis Comparativo</span>
+              <span class="content-label-title"><i class="pi pi-chart-bar"></i> Análisis Comparativo</span>
               <span class="content-label-desc">Comparación temporal de cambios detectados</span>
             </label>
           </div>
@@ -176,7 +176,7 @@
               (change)="onContentToggle('recommendations')"
             >
             <label for="contentRecommendations" class="content-label">
-              <span class="content-label-title">💡 Recomendaciones</span>
+              <span class="content-label-title"><i class="pi pi-lightbulb"></i> Recomendaciones</span>
               <span class="content-label-desc">Sugerencias basadas en el análisis de áreas verdes</span>
             </label>
           </div>
@@ -185,7 +185,7 @@
 
       <!-- Resumen del Informe -->
       <div class="modal-summary">
-        <strong>📋 Resumen del Informe:</strong><br>
+        <strong><i class="pi pi-list"></i> Resumen del Informe:</strong><br>
         Formato: <strong>{{ getFormatLabel() }}</strong> | 
         Área: <strong>{{ getRegionLabel() }}</strong> | 
         Elementos: <strong>{{ getSelectedContentCount() }} seleccionados</strong> | 
