@@ -15,9 +15,9 @@
   <div class="section">
     <div class="section-title">Zona Resaltada</div>
     <div class="hovered-region" *ngIf="hoveredCell; else hoveredFallback">
-      <strong><i class="pi pi-map-marker"></i> {{ hoveredCell?.name }}</strong>
-      <p><strong>Tipo:</strong> {{ hoveredCell?.type }}</p>
-      <p><strong>Área:</strong> {{ hoveredCell?.area }}</p>
+      <strong><i class="pi pi-map-marker"></i> {{ hoveredCell.name }}</strong>
+      <p><strong>Tipo:</strong> {{ hoveredCell.type }}</p>
+      <p><strong>Área:</strong> {{ hoveredCell.area }}</p>
     </div>
     <ng-template #hoveredFallback>
       <div class="hovered-region">

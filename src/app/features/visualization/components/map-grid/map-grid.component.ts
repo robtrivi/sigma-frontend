@@ -21,4 +21,11 @@ export class MapGridComponent {
   trackByCellId(_: number, cell: MapCell): number {
     return cell.id;
   }
+
+  getCellClasses(cell: MapCell): Record<string, boolean> {
+    return {
+      [cell.classId]: true,
+      selected: cell.selected
+    };
+  }
 }

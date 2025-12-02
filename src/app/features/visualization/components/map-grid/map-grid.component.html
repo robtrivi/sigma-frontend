@@ -4,7 +4,7 @@
       <div
         class="map-cell"
         *ngFor="let cell of cells; trackBy: trackByCellId"
-        [ngClass]="[cell.classId, { selected: cell.selected }]"
+        [ngClass]="getCellClasses(cell)"
         (mouseenter)="cellHover.emit(cell)"
         (mouseleave)="cellLeave.emit()"
         (click)="cellSelect.emit(cell)"
