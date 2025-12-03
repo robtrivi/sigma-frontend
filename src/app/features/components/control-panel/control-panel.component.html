@@ -2,27 +2,67 @@
   <h2>Panel de Control</h2>
 
   <div class="section">
-    <div class="section-title">Cargar Imagen Aérea</div>
+    <div class="section-title">Cargar Escena TIFF</div>
     <div class="upload-area" (click)="fileInput.click()">
       <div class="upload-icon"><i class="pi pi-upload"></i></div>
-      <p>Arrastra aquí tu archivo TIFF</p>
-      <p class="upload-hint">o haz clic para seleccionar</p>
-      <div class="upload-file-name" [class.active]="uploadedFile">{{ uploadedFile || 'Ningún archivo cargado' }}</div>
+      <p>Selecciona archivo TIFF/GeoTIFF</p>
+      <p class="upload-hint">{{ selectedFile?.name || 'Ningún archivo seleccionado' }}</p>
     </div>
     <input #fileInput type="file" accept=".tiff,.tif" (change)="onFileSelect($event)" hidden>
+    
+    <div class="form-group">
+      <label>Fecha de Captura</label>
+      <input type="date" [(ngModel)]="captureDate" [disabled]="isLoading">
+    </div>
+    
+    <div class="form-group">
+      <label>Código EPSG</label>
+      <input type="number" [(ngModel)]="epsg" [disabled]="isLoading" placeholder="32618">
+    </div>
+    
+    <div class="form-group">
+      <label>Sensor</label>
+      <input type="text" [(ngModel)]="sensor" [disabled]="isLoading" placeholder="drone_dji_phantom">
+    </div>
+    
+    <div class="form-group">
+      <label>Región ID</label>
+      <select [(ngModel)]="regionId" [disabled]="isLoading">
+        <option value="region_norte">Región Norte</option>
+        <option value="region_sur">Región Sur</option>
+        <option value="region_este">Región Este</option>
+        <option value="region_oeste">Región Oeste</option>
+      </select>
+    </div>
+    
+    <button class="btn-upload" 
+            (click)="onUploadScene()" 
+            [disabled]="!selectedFile || !captureDate || isLoading">
+      <i class="pi pi-cloud-upload"></i>
+      {{ isLoading ? 'Cargando...' : 'Cargar y Procesar' }}
+    </button>
+    
+    <button class="btn-segment" 
+            *ngIf="canRunSegmentation"
+            (click)="onRunSegmentation()" 
+            [disabled]="isLoading">
+      <i class="pi pi-cog"></i>
+      {{ isLoading ? 'Segmentando...' : 'Ejecutar Segmentación' }}
+    </button>
   </div>
 
   <div class="section">
-    <div class="section-title">Zona Resaltada</div>
-    <div class="hovered-region" *ngIf="hoveredCell; else hoveredFallback">
-      <strong><i class="pi pi-map-marker"></i> {{ hoveredCell.name }}</strong>
-      <p><strong>Tipo:</strong> {{ hoveredCell.type }}</p>
-      <p><strong>Área:</strong> {{ hoveredCell.area }}</p>
+    <div class="section-title">Segmento Resaltado</div>
+    <div class="hovered-region" *ngIf="hoveredFeature; else hoveredFallback">
+      <strong><i class="pi pi-map-marker"></i> {{ hoveredFeature.properties.className }}</strong>
+      <p><strong>Área:</strong> {{ hoveredFeature.properties.areaM2.toFixed(2) }} m²</p>
+      <p><strong>Confianza:</strong> {{ (hoveredFeature.properties.confidence * 100).toFixed(1) }}%</p>
+      <p><strong>Período:</strong> {{ hoveredFeature.properties.periodo }}</p>
     </div>
     <ng-template #hoveredFallback>
       <div class="hovered-region">
-        <strong><i class="pi pi-map-marker"></i> Pasa mouse sobre una zona</strong>
-        <p>Se mostrarán detalles de la zona aquí en tiempo real.</p>
+        <strong><i class="pi pi-map-marker"></i> Pasa mouse sobre un segmento</strong>
+        <p>Se mostrarán detalles del segmento aquí.</p>
       </div>
     </ng-template>
   </div>

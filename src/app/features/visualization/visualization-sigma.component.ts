@@ -1,100 +1,189 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { MapGridComponent } from '../components/map-grid/map-grid.component';
-import { ControlPanelComponent } from '../components/control-panel/control-panel.component';
+import { LeafletMapComponent } from '../components/leaflet-map/leaflet-map.component';
+import { ControlPanelComponent, SceneUploadData } from '../components/control-panel/control-panel.component';
 import { DashboardPanelComponent } from '../components/dashboard/dashboard-panel.component';
 import { VisualizationHeaderComponent } from '../components/header/visualization-header.component';
 import { DownloadModalComponent } from '../components/download-modal/download-modal.component';
-import { ChartBar, ClassDistributionStat, ClassType, MapCell, MonthFilter } from '../models/visualization.models';
+import { ChartBar, ClassDistributionStat, ClassType, MonthFilter } from '../models/visualization.models';
 import { ReportGeneratorService } from '../services/report-generator.service';
+import { ScenesService } from '../services/scenes.service';
+import { SegmentsService } from '../services/segments.service';
+import { SegmentFeature, SceneResponse } from '../models/api.models';
+import { CLASS_CATALOG, getClassConfig } from '../models/class-catalog';
+import { finalize } from 'rxjs';
 
 @Component({
   selector: 'app-visualization-sigma',
   standalone: true,
-  imports: [CommonModule, RouterLink, MapGridComponent, ControlPanelComponent, DashboardPanelComponent, VisualizationHeaderComponent, DownloadModalComponent],
+  imports: [
+    CommonModule,
+    RouterLink,
+    LeafletMapComponent,
+    ControlPanelComponent,
+    DashboardPanelComponent,
+    VisualizationHeaderComponent,
+    DownloadModalComponent
+  ],
   templateUrl: './visualization-sigma.component.html',
   styleUrls: ['./visualization-sigma.component.scss']
 })
-export class VisualizationSigmaComponent {
+export class VisualizationSigmaComponent implements OnInit {
   uploadedFile: string = '';
-  hoveredCell: MapCell | null = null;
+  hoveredFeature: SegmentFeature | null = null;
   activeMonth: string = 'octubre';
   showDownloadModal: boolean = false;
-
-  constructor(private reportGenerator: ReportGeneratorService) {}
+  isLoading = signal(false);
+  loadingMessage = signal('');
+  errorMessage = signal('');
+  
+  currentScene: SceneResponse | null = null;
+  segmentFeatures = signal<SegmentFeature[]>([]);
+  selectedRegionId: string = 'region_norte';
+  selectedPeriodo: string = '2024-11';
 
   months: MonthFilter[] = [
-    { id: 'agosto', label: 'Agosto 2025', selected: false },
-    { id: 'septiembre', label: 'Septiembre 2025', selected: false },
-    { id: 'octubre', label: 'Octubre 2025', selected: true }
+    { id: '2024-08', label: 'Agosto 2024', selected: false },
+    { id: '2024-09', label: 'Septiembre 2024', selected: false },
+    { id: '2024-10', label: 'Octubre 2024', selected: false },
+    { id: '2024-11', label: 'Noviembre 2024', selected: true }
   ];
 
-  classTypes: ClassType[] = [
-    { id: 'green', label: 'Áreas Verdes', color: '#4a7c2c', icon: 'pi-sun', selected: true },
-    { id: 'building', label: 'Edificios', color: '#8b7355', icon: 'pi-building', selected: true },
-    { id: 'street', label: 'Calles', color: '#808080', icon: 'pi-minus', selected: true },
-    { id: 'parking', label: 'Parqueaderos', color: '#a9a9a9', icon: 'pi-car', selected: true },
-    { id: 'water', label: 'Cuerpos de Agua', color: '#4a90e2', icon: 'pi-inbox', selected: true }
-  ];
+  classTypes: ClassType[] = CLASS_CATALOG.map(c => ({
+    id: c.id,
+    label: c.name,
+    color: c.color,
+    icon: c.icon,
+    selected: true
+  }));
 
-  mapCells: MapCell[] = [
-    // Fila 1
-    { id: 1, name: 'Área Verde A', type: 'Áreas Verdes', classId: 'green', area: '3,125 m²', color: '#4a7c2c', selected: false },
-    { id: 2, name: 'Área Verde B', type: 'Áreas Verdes', classId: 'green', area: '2,890 m²', color: '#4a7c2c', selected: false },
-    { id: 3, name: 'Calle Principal', type: 'Calles', classId: 'street', area: '1,562 m²', color: '#808080', selected: false },
-    { id: 4, name: 'Área Verde C', type: 'Áreas Verdes', classId: 'green', area: '3,450 m²', color: '#4a7c2c', selected: false },
-    { id: 5, name: 'Edificio 1', type: 'Edificios', classId: 'building', area: '2,340 m²', color: '#8b7355', selected: false },
-    // Fila 2
-    { id: 6, name: 'Área Verde D', type: 'Áreas Verdes', classId: 'green', area: '2,675 m²', color: '#4a7c2c', selected: false },
-    { id: 7, name: 'Lago', type: 'Cuerpos de Agua', classId: 'water', area: '1,875 m²', color: '#4a90e2', selected: false },
-    { id: 8, name: 'Área Verde E', type: 'Áreas Verdes', classId: 'green', area: '3,125 m²', color: '#4a7c2c', selected: false },
-    { id: 9, name: 'Parqueadero', type: 'Parqueaderos', classId: 'parking', area: '2,250 m²', color: '#a9a9a9', selected: false },
-    { id: 10, name: 'Edificio 2', type: 'Edificios', classId: 'building', area: '2,810 m²', color: '#8b7355', selected: false },
-    // Fila 3
-    { id: 11, name: 'Biblioteca', type: 'Edificios', classId: 'building', area: '1,950 m²', color: '#8b7355', selected: false },
-    { id: 12, name: 'Avenida Sur', type: 'Calles', classId: 'street', area: '1,406 m²', color: '#808080', selected: false },
-    { id: 13, name: 'Área Verde F', type: 'Áreas Verdes', classId: 'green', area: '2,340 m²', color: '#4a7c2c', selected: false },
-    { id: 14, name: 'Calle Este', type: 'Calles', classId: 'street', area: '1,718 m²', color: '#808080', selected: false },
-    { id: 15, name: 'Parqueadero 2', type: 'Parqueaderos', classId: 'parking', area: '1,875 m²', color: '#a9a9a9', selected: false },
-    // Fila 4
-    { id: 16, name: 'Parqueadero 3', type: 'Parqueaderos', classId: 'parking', area: '2,125 m²', color: '#a9a9a9', selected: false },
-    { id: 17, name: 'Área Verde G', type: 'Áreas Verdes', classId: 'green', area: '3,675 m²', color: '#4a7c2c', selected: false },
-    { id: 18, name: 'Edificio 3', type: 'Edificios', classId: 'building', area: '2,575 m²', color: '#8b7355', selected: false },
-    { id: 19, name: 'Calle Oeste', type: 'Calles', classId: 'street', area: '1,562 m²', color: '#808080', selected: false },
-    { id: 20, name: 'Fuente', type: 'Cuerpos de Agua', classId: 'water', area: '312 m²', color: '#4a90e2', selected: false }
-  ];
+  constructor(
+    private reportGenerator: ReportGeneratorService,
+    private scenesService: ScenesService,
+    private segmentsService: SegmentsService
+  ) {}
 
-  onFileSelect(file: File): void {
-    this.uploadedFile = file?.name ?? '';
+  ngOnInit(): void {
+    this.selectedPeriodo = this.months.find(m => m.selected)?.id || '2024-11';
   }
 
-  onCellHover(cell: MapCell): void {
-    this.hoveredCell = cell;
+  get canRunSegmentation(): boolean {
+    return !!this.currentScene;
   }
 
-  onCellLeave(): void {
-    this.hoveredCell = null;
+  onSceneUpload(data: SceneUploadData): void {
+    this.isLoading.set(true);
+    this.loadingMessage.set('Cargando escena TIFF...');
+    this.errorMessage.set('');
+
+    this.scenesService.uploadScene({
+      file: data.file,
+      captureDate: data.captureDate,
+      epsg: data.epsg,
+      sensor: data.sensor,
+      regionId: data.regionId
+    })
+    .pipe(finalize(() => {
+      this.isLoading.set(false);
+      this.loadingMessage.set('');
+    }))
+    .subscribe({
+      next: (scene) => {
+        this.currentScene = scene;
+        this.uploadedFile = data.file.name;
+        this.selectedRegionId = scene.regionId;
+        this.loadingMessage.set('Escena cargada exitosamente');
+        this.runSegmentationAfterUpload(data.file);
+      },
+      error: (err) => {
+        console.error('Error cargando escena:', err);
+        this.errorMessage.set(err.error?.message || 'Error al cargar la escena');
+      }
+    });
   }
 
-  onCellClick(cell: MapCell): void {
-    cell.selected = !cell.selected;
+  private runSegmentationAfterUpload(file: File): void {
+    if (!this.currentScene) return;
+
+    this.isLoading.set(true);
+    this.loadingMessage.set('Ejecutando segmentación con Deep Learning...');
+
+    this.segmentsService.runSegmentation(this.currentScene.sceneId, file)
+      .pipe(finalize(() => {
+        this.isLoading.set(false);
+        this.loadingMessage.set('');
+      }))
+      .subscribe({
+        next: (result) => {
+          this.loadingMessage.set(`Segmentación completada: ${result.inserted} segmentos`);
+          this.loadSegmentsTiles();
+        },
+        error: (err) => {
+          console.error('Error en segmentación:', err);
+          this.errorMessage.set(err.error?.message || 'Error en la segmentación');
+        }
+      });
+  }
+
+  onRunSegmentation(): void {
+    if (!this.currentScene) return;
+    this.loadSegmentsTiles();
+  }
+
+  private loadSegmentsTiles(): void {
+    this.isLoading.set(true);
+    this.loadingMessage.set('Cargando segmentos...');
+
+    const selectedClassIds = this.classTypes
+      .filter(c => c.selected)
+      .map(c => c.id);
+
+    this.segmentsService.getSegmentsTiles({
+      regionId: this.selectedRegionId,
+      periodo: this.selectedPeriodo,
+      classIds: selectedClassIds.length > 0 ? selectedClassIds : undefined
+    })
+    .pipe(finalize(() => {
+      this.isLoading.set(false);
+      this.loadingMessage.set('');
+    }))
+    .subscribe({
+      next: (response) => {
+        this.segmentFeatures.set(response.features);
+        this.loadingMessage.set(`${response.features.length} segmentos cargados`);
+      },
+      error: (err) => {
+        console.error('Error cargando segmentos:', err);
+        this.errorMessage.set(err.error?.message || 'Error al cargar segmentos');
+      }
+    });
+  }
+
+  onFeatureClick(feature: SegmentFeature): void {
+    console.log('Feature clicked:', feature);
   }
 
   onMonthFilterChange(): void {
     const selectedMonths = this.months.filter(m => m.selected);
     if (selectedMonths.length > 0) {
       this.activeMonth = selectedMonths[0].id;
+      this.selectedPeriodo = selectedMonths[0].id;
+      if (this.currentScene) {
+        this.loadSegmentsTiles();
+      }
     }
   }
 
   onClassFilterChange(): void {
-    // Filtro se aplica automáticamente a través de getFilteredCells()
+    if (this.currentScene) {
+      this.loadSegmentsTiles();
+    }
   }
 
-  getFilteredCells(): MapCell[] {
-    return this.mapCells.filter(cell => {
-      const classType = this.classTypes.find(c => c.id === cell.classId);
+  getFilteredFeatures(): SegmentFeature[] {
+    return this.segmentFeatures().filter(feature => {
+      const classType = this.classTypes.find(c => c.id === feature.properties.classId);
       return classType?.selected;
     });
   }
@@ -105,24 +194,30 @@ export class VisualizationSigmaComponent {
 
   setActiveMonth(monthId: string): void {
     this.activeMonth = monthId;
+    this.selectedPeriodo = monthId;
+    if (this.currentScene) {
+      this.loadSegmentsTiles();
+    }
   }
 
   getStatusMessage(): string {
+    if (this.errorMessage()) {
+      return `Error: ${this.errorMessage()}`;
+    }
+    if (this.loadingMessage()) {
+      return this.loadingMessage();
+    }
     const selectedMonths = this.getSelectedMonths();
     if (selectedMonths.length > 1) {
       const labels = selectedMonths.map(m => m.label.split(' ')[0]).join(', ');
-      return `Filtro temporal activo: ${labels} 2025`;
-    } else if (selectedMonths.length === 1) {
-      return 'Mapa segmentado listo para visualizar';
+      return `Filtro temporal activo: ${labels}`;
+    } else if (selectedMonths.length === 1 && this.segmentFeatures().length > 0) {
+      return `Mapa segmentado: ${this.segmentFeatures().length} segmentos`;
     }
-    return 'Estado: Esperando carga de imagen';
+    return 'Estado: Esperando carga de escena TIFF';
   }
 
   getDashboardTitle(): string {
-    const selectedCells = this.mapCells.filter(c => c.selected);
-    if (selectedCells.length > 0) {
-      return 'Resumen de Subregión';
-    }
     const selectedMonths = this.getSelectedMonths();
     if (selectedMonths.length > 1) {
       return 'Resumen Temporal';
@@ -131,49 +226,50 @@ export class VisualizationSigmaComponent {
   }
 
   getStatLabel(): string {
-    const selectedCells = this.mapCells.filter(c => c.selected);
-    if (selectedCells.length > 0) {
-      return 'Celdas seleccionadas';
-    }
     const selectedMonths = this.getSelectedMonths();
     if (selectedMonths.length > 1) {
       return 'Períodos';
     }
-    return 'Celdas visibles';
+    return 'Segmentos totales';
   }
 
-  getVisibleCellsCount(): number {
-    const selectedCells = this.mapCells.filter(c => c.selected);
-    if (selectedCells.length > 0) {
-      return selectedCells.length;
-    }
+  getVisibleSegmentsCount(): number {
     const selectedMonths = this.getSelectedMonths();
     if (selectedMonths.length > 1) {
       return selectedMonths.length;
     }
-    return this.getFilteredCells().length;
+    return this.getFilteredFeatures().length;
   }
 
   getCoverageLabel(): string {
-    return 'Cobertura verde';
+    return 'Superficies blandas';
   }
 
   getCoveragePercentage(): number {
-    const selectedCells = this.mapCells.filter(c => c.selected);
-    const cells = selectedCells.length > 0 ? selectedCells : this.getFilteredCells();
-    const greenCells = cells.filter(c => c.classId === 'green').length;
-    return Math.round((greenCells / cells.length) * 100) || 0;
+    const features = this.getFilteredFeatures();
+    if (features.length === 0) return 0;
+    
+    const totalArea = features.reduce((sum, f) => sum + f.properties.areaM2, 0);
+    const greenArea = features
+      .filter(f => f.properties.classId === 'superficies_blandas')
+      .reduce((sum, f) => sum + f.properties.areaM2, 0);
+    
+    return totalArea > 0 ? Math.round((greenArea / totalArea) * 100) : 0;
   }
 
   getClassDistribution(): ClassDistributionStat[] {
-    const filteredCells = this.getFilteredCells();
-    const totalCells = filteredCells.length || 1;
+    const features = this.getFilteredFeatures();
+    if (features.length === 0) return [];
+
+    const totalArea = features.reduce((sum, f) => sum + f.properties.areaM2, 0);
     
     return this.classTypes
       .filter(ct => ct.selected)
       .map(classType => {
-        const count = filteredCells.filter(c => c.classId === classType.id).length;
-        const percentage = Math.round((count / totalCells) * 100);
+        const classFeatures = features.filter(f => f.properties.classId === classType.id);
+        const classArea = classFeatures.reduce((sum, f) => sum + f.properties.areaM2, 0);
+        const percentage = totalArea > 0 ? Math.round((classArea / totalArea) * 100) : 0;
+        
         return {
           label: classType.label,
           icon: classType.icon,
@@ -184,14 +280,9 @@ export class VisualizationSigmaComponent {
   }
 
   getGradient(classId: string): string {
-    const gradients: { [key: string]: string } = {
-      'green': 'linear-gradient(90deg, #4a7c2c, #6ba84a)',
-      'building': 'linear-gradient(90deg, #8b7355, #6b5344)',
-      'street': 'linear-gradient(90deg, #808080, #606060)',
-      'parking': 'linear-gradient(90deg, #a9a9a9, #898989)',
-      'water': 'linear-gradient(90deg, #4a90e2, #2e7cb0)'
-    };
-    return gradients[classId] || 'linear-gradient(90deg, #4a7c2c, #6ba84a)';
+    const config = getClassConfig(classId);
+    const color = config.color;
+    return `linear-gradient(90deg, ${color}, ${color}dd)`;
   }
 
   getChartData(): ChartBar[] {
@@ -204,30 +295,26 @@ export class VisualizationSigmaComponent {
   }
 
   getToolbarInfo(): string {
-    const selectedCells = this.mapCells.filter(c => c.selected);
-    if (selectedCells.length > 0) {
-      return `Subregión activa: ${selectedCells.length} celdas | ${this.getCoveragePercentage()}% cobertura verde`;
-    }
-    
     const selectedMonths = this.getSelectedMonths();
     if (selectedMonths.length > 1) {
       const labels = selectedMonths.map(m => m.label.split(' ')[0]).join(', ');
-      return `Período: ${labels} 2025 | Comparación de ${selectedMonths.length} mapas`;
+      return `Período: ${labels} | Comparación de ${selectedMonths.length} mapas`;
     }
     
-    // Mensaje para un único mes seleccionado
-    const activeMonthLabel = selectedMonths[0]?.label || 'Octubre 2025';
-    const filteredCells = this.getFilteredCells();
-    const totalCells = this.mapCells.length;
-    const greenCells = filteredCells.filter(c => c.classId === 'green').length;
-    const greenPercentage = totalCells > 0 ? Math.round((greenCells / totalCells) * 100) : 0;
+    const activeMonthLabel = selectedMonths[0]?.label || 'Noviembre 2024';
+    const features = this.getFilteredFeatures();
+    const totalSegments = features.length;
+    const greenFeatures = features.filter(f => f.properties.classId === 'superficies_blandas');
+    const greenPercentage = this.getCoveragePercentage();
     
-    return `Mapa segmentado: ${activeMonthLabel} | Total de celdas: ${totalCells} | Áreas verdes: ${greenCells} celdas (${greenPercentage}%)`;
+    return `Mapa segmentado: ${activeMonthLabel} | Total: ${totalSegments} segmentos | Superficies blandas: ${greenFeatures.length} (${greenPercentage}%)`;
   }
 
   clearFilters(): void {
     this.classTypes.forEach(ct => ct.selected = true);
-    this.mapCells.forEach(c => c.selected = false);
+    if (this.currentScene) {
+      this.loadSegmentsTiles();
+    }
   }
 
   downloadReport(): void {
@@ -239,17 +326,14 @@ export class VisualizationSigmaComponent {
   }
 
   onDownloadModalSubmit(data: { format: string; content: string[]; region: string }): void {
-    const activeMonthLabel = this.getSelectedMonths()[0]?.label || 'Octubre 2025';
-    const filteredCells = this.getFilteredCells();
-
+    const activeMonthLabel = this.getSelectedMonths()[0]?.label || 'Noviembre 2024';
+    
     this.reportGenerator.generateReport({
       format: data.format as 'pdf' | 'csv',
       content: data.content,
       region: data.region as 'full' | 'subregion' | 'green-only',
-      cells: filteredCells,
+      cells: [],
       monthLabel: activeMonthLabel
     });
-
-    // El modal se mantiene abierto para que el usuario pueda descargar múltiples veces si lo desea
   }
 }

@@ -5,10 +5,13 @@
     <div class="sigma-main-layout">
       <app-control-panel
         [uploadedFile]="uploadedFile"
-        [hoveredCell]="hoveredCell"
+        [hoveredFeature]="hoveredFeature"
         [months]="months"
         [classTypes]="classTypes"
-        (fileSelected)="onFileSelect($event)"
+        [isLoading]="isLoading()"
+        [canRunSegmentation]="canRunSegmentation"
+        (sceneUpload)="onSceneUpload($event)"
+        (runSegmentation)="onRunSegmentation()"
         (monthFilterChange)="onMonthFilterChange()"
         (classFilterChange)="onClassFilterChange()"
       ></app-control-panel>
@@ -18,7 +21,6 @@
         <span>{{ getStatusMessage() }}</span>
       </div>
 
-      <!-- Month tabs -->
       <div class="tab-container" *ngIf="getSelectedMonths().length > 1">
         <div class="tab" 
              *ngFor="let month of getSelectedMonths()" 
@@ -29,20 +31,19 @@
       </div>
 
       <div class="content-wrapper">
-        <app-map-grid
-          [cells]="getFilteredCells()"
-          [classTypes]="classTypes"
-          [hoveredCell]="hoveredCell"
-          (cellHover)="onCellHover($event)"
-          (cellLeave)="onCellLeave()"
-          (cellSelect)="onCellClick($event)"
-        ></app-map-grid>
+        <app-leaflet-map
+          [features]="getFilteredFeatures()"
+          [center]="[-2.1448, -79.9651]"
+          [zoom]="15"
+          [showLegend]="true"
+          (featureClick)="onFeatureClick($event)"
+        ></app-leaflet-map>
 
         <app-dashboard-panel
           [dashboardTitle]="getDashboardTitle()"
           [statLabel]="getStatLabel()"
-          [visibleCellsCount]="getVisibleCellsCount()"
-          [totalCells]="20"
+          [visibleCellsCount]="getVisibleSegmentsCount()"
+          [totalCells]="segmentFeatures().length"
           [coverageLabel]="getCoverageLabel()"
           [coveragePercentage]="getCoveragePercentage()"
           [classDistribution]="getClassDistribution()"
@@ -64,7 +65,6 @@
     </div>
   </div>
 
-  <!-- Download Modal -->
   <app-download-modal 
     *ngIf="showDownloadModal"
     (close)="onDownloadModalClose()"
