@@ -10,7 +10,8 @@ import { ChartBar, ClassDistributionStat, ClassType, MonthFilter } from '../mode
 import { ReportGeneratorService } from '../services/report-generator.service';
 import { ScenesService } from '../services/scenes.service';
 import { SegmentsService } from '../services/segments.service';
-import { SegmentFeature, SceneResponse } from '../models/api.models';
+import { RegionsService } from '../services/regions.service';
+import { SegmentFeature, SceneResponse, Region } from '../models/api.models';
 import { CLASS_CATALOG, getClassConfig } from '../models/class-catalog';
 import { finalize } from 'rxjs';
 
@@ -40,8 +41,9 @@ export class VisualizationSigmaComponent implements OnInit {
   
   currentScene: SceneResponse | null = null;
   segmentFeatures = signal<SegmentFeature[]>([]);
-  selectedRegionId: string = 'region_norte';
+  selectedRegionId: string = '';
   selectedPeriodo: string = '2024-11';
+  regions: Region[] = [];
 
   months: MonthFilter[] = [
     { id: '2024-08', label: 'Agosto 2024', selected: false },
@@ -61,11 +63,21 @@ export class VisualizationSigmaComponent implements OnInit {
   constructor(
     private reportGenerator: ReportGeneratorService,
     private scenesService: ScenesService,
-    private segmentsService: SegmentsService
+    private segmentsService: SegmentsService,
+    private regionsService: RegionsService
   ) {}
 
   ngOnInit(): void {
     this.selectedPeriodo = this.months.find(m => m.selected)?.id || '2024-11';
+    this.regionsService.getRegions().subscribe({
+      next: (regions) => {
+        this.regions = regions;
+        if (regions.length > 0 && !this.selectedRegionId) {
+          this.selectedRegionId = regions[0].id;
+        }
+      },
+      error: (err) => console.error('Error cargando regiones:', err)
+    });
   }
 
   get canRunSegmentation(): boolean {

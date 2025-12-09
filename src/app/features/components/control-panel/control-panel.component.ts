@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClassType, MonthFilter } from '../../models/visualization.models';
-import { SegmentFeature } from '../../models/api.models';
+import { SegmentFeature, Region } from '../../models/api.models';
+import { RegionsService } from '../../services/regions.service';
 
 export interface SceneUploadData {
   file: File;
@@ -19,7 +20,7 @@ export interface SceneUploadData {
   templateUrl: './control-panel.component.html',
   styleUrls: ['./control-panel.component.scss']
 })
-export class ControlPanelComponent {
+export class ControlPanelComponent implements OnInit {
   @Input({ required: true }) uploadedFile: string = '';
   @Input({ required: true }) hoveredFeature: SegmentFeature | null = null;
   @Input({ required: true }) months: MonthFilter[] = [];
@@ -36,7 +37,22 @@ export class ControlPanelComponent {
   captureDate: string = '';
   epsg: number = 32717;
   sensor: string = 'drone_dji_phantom';
-  regionId: string = 'region_norte';
+  regionId: string = '';
+  regions: Region[] = [];
+
+  constructor(private regionsService: RegionsService) {}
+
+  ngOnInit(): void {
+    this.regionsService.getRegions().subscribe({
+      next: (regions) => {
+        this.regions = regions;
+        if (regions.length > 0) {
+          this.regionId = regions[0].id;
+        }
+      },
+      error: (err) => console.error('Error cargando regiones:', err)
+    });
+  }
 
   onFileSelect(event: Event): void {
     const input = event.target as HTMLInputElement;

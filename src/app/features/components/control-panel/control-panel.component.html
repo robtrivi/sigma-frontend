@@ -29,10 +29,7 @@
     <div class="form-group">
       <label>Región ID</label>
       <select [(ngModel)]="regionId" [disabled]="isLoading">
-        <option value="region_norte">Región Norte</option>
-        <option value="region_sur">Región Sur</option>
-        <option value="region_este">Región Este</option>
-        <option value="region_oeste">Región Oeste</option>
+        <option *ngFor="let region of regions" [value]="region.id">{{ region.name }}</option>
       </select>
     </div>
     

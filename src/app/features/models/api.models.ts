@@ -1,3 +1,9 @@
+export interface Region {
+  id: string;
+  name: string;
+  geometry: any;
+}
+
 export interface SceneUploadRequest {
   file: File;
   captureDate: string;
