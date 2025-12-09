@@ -37,16 +37,12 @@
             (click)="onUploadScene()" 
             [disabled]="!canUpload">
       <i class="pi pi-cloud-upload"></i>
-      {{ isLoading ? 'Cargando...' : 'Cargar y Procesar' }}
+      {{ isLoading ? 'Cargando...' : 'Cargar y Segmentar' }}
     </button>
     
-    <button class="btn-segment" 
-            *ngIf="canRunSegmentation"
-            (click)="onRunSegmentation()" 
-            [disabled]="isLoading">
-      <i class="pi pi-cog"></i>
-      {{ isLoading ? 'Segmentando...' : 'Ejecutar Segmentación' }}
-    </button>
+    <small class="info-text" *ngIf="!canRunSegmentation">
+      <i class="pi pi-info-circle"></i> La segmentación se ejecuta automáticamente al cargar la escena
+    </small>
   </div>
 
   <div class="section">
@@ -66,10 +62,14 @@
   </div>
 
   <div class="section">
-    <div class="filter-title">Filtro Temporal - Selecciona meses:</div>
+    <div class="filter-title">Filtro Temporal - Período:</div>
     <div class="filter-group">
-      <div class="checkbox-item" *ngFor="let month of months">
-        <input type="checkbox" [id]="'month-' + month.id" [(ngModel)]="month.selected" (change)="notifyMonthChange()">
+      <div class="radio-item" *ngFor="let month of months" (click)="selectSingleMonth(month)">
+        <input type="radio" 
+               [id]="'month-' + month.id" 
+               name="periodo-filter"
+               [checked]="month.selected"
+               readonly>
         <label [for]="'month-' + month.id">{{ month.label }}</label>
       </div>
     </div>

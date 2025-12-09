@@ -28,7 +28,7 @@ export interface SegmentationResponse {
 
 export interface SegmentsTilesParams {
   regionId: string;
-  periodo: string;
+  periodo?: string;
   classIds?: string[];
   bbox?: string;
 }
@@ -41,14 +41,15 @@ export interface SegmentProperties {
   areaM2: number;
   periodo: string;
   confidence: number;
-  source: string;
+  source: 'dl_segmentation' | 'manual';
+  notes?: string;
 }
 
 export interface SegmentFeature {
   type: 'Feature';
   geometry: {
-    type: 'MultiPolygon';
-    coordinates: number[][][][];
+    type: 'Polygon' | 'MultiPolygon';
+    coordinates: number[][][] | number[][][][];
   };
   properties: SegmentProperties;
 }
@@ -56,4 +57,19 @@ export interface SegmentFeature {
 export interface SegmentsTilesResponse {
   type: 'FeatureCollection';
   features: SegmentFeature[];
+}
+
+// Interfaz para periodos disponibles
+export interface PeriodInfo {
+  periodo: string; // Formato YYYY-MM
+  regionId: string;
+  segmentCount: number;
+  lastUpdated: string; // ISO 8601 date string
+}
+
+// Interfaz para actualización manual de segmentos
+export interface SegmentUpdateRequest {
+  classId: string;
+  confidence?: number;
+  notes?: string;
 }

@@ -211,6 +211,49 @@
   }
 }
 
+.radio-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+
+  &:hover {
+    background-color: #f0f4eb;
+  }
+
+  input[type="radio"] {
+    margin-right: 10px;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    accent-color: #4a7c2c;
+  }
+
+  label {
+    cursor: pointer;
+    font-size: 13px;
+    flex: 1;
+  }
+}
+
+.info-text {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #f0f4eb;
+  border-radius: 4px;
+  
+  i {
+    margin-right: 5px;
+    color: #4a7c2c;
+  }
+}
+
 @media (max-width: 1024px) {
   .sigma-sidebar {
     width: 100%;

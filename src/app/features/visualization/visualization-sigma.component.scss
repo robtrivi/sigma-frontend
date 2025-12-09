@@ -16,7 +16,7 @@
   width: 100%;
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: 1000;
 }
 
 .sigma-container {
@@ -256,6 +256,14 @@ app-dashboard-panel {
   padding: 20px;
   overflow: hidden;
   background-color: #f7f9f5;
+  min-height: 0;
+}
+
+app-leaflet-map {
+  flex: 1;
+  display: block;
+  min-width: 0;
+  min-height: 0;
 }
 
 // Map section

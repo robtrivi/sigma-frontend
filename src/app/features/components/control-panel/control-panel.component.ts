@@ -105,6 +105,12 @@ export class ControlPanelComponent implements OnInit {
     this.monthFilterChange.emit();
   }
 
+  selectSingleMonth(selectedMonth: MonthFilter): void {
+    this.months.forEach(m => m.selected = false);
+    selectedMonth.selected = true;
+    this.monthFilterChange.emit();
+  }
+
   notifyClassChange(): void {
     this.classFilterChange.emit();
   }

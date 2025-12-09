@@ -44,11 +44,9 @@ export class InitialScreenComponent {
   }
 
   onMonthFilterChange(): void {
-    // Filtro de meses
   }
 
   onClassFilterChange(): void {
-    // Filtro de clases
   }
 
   clearFilters(): void {
@@ -57,6 +55,5 @@ export class InitialScreenComponent {
   }
 
   navigateToVisualization(): void {
-    // La navegación se realiza con routerLink
   }
 }

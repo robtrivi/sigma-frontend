@@ -1,10 +1,12 @@
 .sigma-hero {
+  position: relative;
   width: 100%;
   background: linear-gradient(135deg, #1e2e1a 0%, #3a5b20 100%);
   color: white;
   padding: 20px 28px;
   border-radius: 0 0 12px 12px;
   box-shadow: 0 4px 18px rgba(30, 46, 26, 0.4);
+  z-index: 1001;
 }
 
 .sigma-hero__content {

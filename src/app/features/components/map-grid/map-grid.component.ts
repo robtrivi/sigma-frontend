@@ -39,11 +39,9 @@ export class MapGridComponent {
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
 
-        // Posicionar el info-box cerca del cursor, con offset
         let posX = x + 15;
         let posY = y - 50;
 
-        // Ajustar si se sale de los bordes
         if (posX + 250 > rect.width) {
           posX = x - 265;
         }

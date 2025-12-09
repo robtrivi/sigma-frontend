@@ -25,13 +25,16 @@ import { getClassColor, CLASS_CATALOG } from '../../models/class-catalog';
       position: relative;
       width: 100%;
       height: 100%;
+      min-height: 400px;
     }
     
     .map {
       width: 100%;
       height: 100%;
+      min-height: 400px;
       border-radius: 8px;
       overflow: hidden;
+      background: #f5f5f5;
     }
     
     .map-legend {
@@ -87,7 +90,9 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   }
 
   ngAfterViewInit(): void {
-    this.initMap();
+    setTimeout(() => {
+      this.initMap();
+    }, 0);
   }
 
   ngOnDestroy(): void {
@@ -103,6 +108,8 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   }
 
   private initMap(): void {
+    console.log('[LeafletMap] Inicializando mapa en:', this.center, 'zoom:', this.zoom);
+    
     this.map = L.map('map', {
       center: this.center,
       zoom: this.zoom,
@@ -114,15 +121,20 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
 
+    console.log('[LeafletMap] Mapa inicializado correctamente');
+    
     this.updateSegments();
   }
 
   private updateSegments(): void {
+    console.log('[LeafletMap] Actualizando segmentos:', this.features.length);
+    
     if (this.segmentsLayer) {
       this.map.removeLayer(this.segmentsLayer);
     }
 
     if (this.features.length === 0) {
+      console.log('[LeafletMap] No hay features para mostrar');
       return;
     }
 
@@ -130,6 +142,8 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       type: 'FeatureCollection' as const,
       features: this.features
     };
+
+    console.log('[LeafletMap] GeoJSON data:', geojsonData);
 
     this.segmentsLayer = L.geoJSON(geojsonData, {
       style: (feature) => {

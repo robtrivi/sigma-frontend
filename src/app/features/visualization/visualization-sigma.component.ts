@@ -11,7 +11,7 @@ import { ReportGeneratorService } from '../services/report-generator.service';
 import { ScenesService } from '../services/scenes.service';
 import { SegmentsService } from '../services/segments.service';
 import { RegionsService } from '../services/regions.service';
-import { SegmentFeature, SceneResponse, Region } from '../models/api.models';
+import { SegmentFeature, SceneResponse, Region, PeriodInfo } from '../models/api.models';
 import { CLASS_CATALOG, getClassConfig } from '../models/class-catalog';
 import { finalize } from 'rxjs';
 
@@ -42,8 +42,9 @@ export class VisualizationSigmaComponent implements OnInit {
   currentScene: SceneResponse | null = null;
   segmentFeatures = signal<SegmentFeature[]>([]);
   selectedRegionId: string = '';
-  selectedPeriodo: string = '2024-11';
+  selectedPeriodo: string = '';
   regions: Region[] = [];
+  availablePeriods: PeriodInfo[] = [];
 
   months: MonthFilter[] = [
     { id: '2024-08', label: 'Agosto 2024', selected: false },
@@ -68,12 +69,12 @@ export class VisualizationSigmaComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.selectedPeriodo = this.months.find(m => m.selected)?.id || '2024-11';
     this.regionsService.getRegions().subscribe({
       next: (regions) => {
         this.regions = regions;
         if (regions.length > 0 && !this.selectedRegionId) {
           this.selectedRegionId = regions[0].id;
+          this.loadAvailablePeriods();
         }
       },
       error: (err) => console.error('Error cargando regiones:', err)
@@ -82,6 +83,50 @@ export class VisualizationSigmaComponent implements OnInit {
 
   get canRunSegmentation(): boolean {
     return !!this.currentScene;
+  }
+
+  onRegionChange(regionId: string): void {
+    if (this.selectedRegionId === regionId) return;
+    
+    this.selectedRegionId = regionId;
+    this.selectedPeriodo = '';
+    this.activeMonth = '';
+    this.currentScene = null;
+    this.segmentFeatures.set([]);
+    
+    this.loadAvailablePeriods();
+  }
+
+  private loadAvailablePeriods(): void {
+    if (!this.selectedRegionId) return;
+
+    this.segmentsService.getAvailablePeriods(this.selectedRegionId).subscribe({
+      next: (periods) => {
+        this.availablePeriods = periods;
+        
+        if (periods.length > 0 && !this.selectedPeriodo) {
+          this.selectedPeriodo = periods[0].periodo;
+        }
+        
+        this.months = periods.map(p => ({
+          id: p.periodo,
+          label: this.formatPeriodoLabel(p.periodo),
+          selected: p.periodo === this.selectedPeriodo
+        }));
+        
+        if (periods.length > 0) {
+          this.loadSegmentsTiles();
+        }
+      },
+      error: (err) => console.error('Error cargando periodos:', err)
+    });
+  }
+
+  private formatPeriodoLabel(periodo: string): string {
+    const [year, month] = periodo.split('-');
+    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    return `${monthNames[parseInt(month) - 1]} ${year}`;
   }
 
   onSceneUpload(data: SceneUploadData): void {
@@ -105,8 +150,12 @@ export class VisualizationSigmaComponent implements OnInit {
         this.currentScene = scene;
         this.uploadedFile = data.file.name;
         this.selectedRegionId = scene.regionId;
-        this.loadingMessage.set('Escena cargada exitosamente');
-        this.runSegmentationAfterUpload(data.file);
+        
+        const periodo = scene.captureDate.substring(0, 7);
+        this.selectedPeriodo = periodo;
+        this.loadingMessage.set('Escena cargada exitosamente. Segmentación ejecutada automáticamente.');
+        
+        this.loadAvailablePeriods();
       },
       error: (err) => {
         console.error('Error cargando escena:', err);
@@ -115,47 +164,43 @@ export class VisualizationSigmaComponent implements OnInit {
     });
   }
 
-  private runSegmentationAfterUpload(file: File): void {
-    if (!this.currentScene) return;
-
-    this.isLoading.set(true);
-    this.loadingMessage.set('Ejecutando segmentación con Deep Learning...');
-
-    this.segmentsService.runSegmentation(this.currentScene.sceneId, file)
-      .pipe(finalize(() => {
-        this.isLoading.set(false);
-        this.loadingMessage.set('');
-      }))
-      .subscribe({
-        next: (result) => {
-          this.loadingMessage.set(`Segmentación completada: ${result.inserted} segmentos`);
-          this.loadSegmentsTiles();
-        },
-        error: (err) => {
-          console.error('Error en segmentación:', err);
-          this.errorMessage.set(err.error?.message || 'Error en la segmentación');
-        }
-      });
-  }
-
   onRunSegmentation(): void {
-    if (!this.currentScene) return;
-    this.loadSegmentsTiles();
+    if (this.selectedRegionId) {
+      this.loadSegmentsTiles();
+    }
   }
 
   private loadSegmentsTiles(): void {
+    if (!this.selectedRegionId) {
+      this.errorMessage.set('No hay región seleccionada');
+      return;
+    }
+
+    if (!this.selectedPeriodo && this.availablePeriods.length === 0) {
+      this.errorMessage.set('No hay periodos disponibles. Sube una escena primero.');
+      return;
+    }
+
+    if (!this.selectedPeriodo && this.availablePeriods.length > 0) {
+      this.selectedPeriodo = this.availablePeriods[0].periodo;
+      this.months.forEach(m => m.selected = m.id === this.selectedPeriodo);
+    }
+
     this.isLoading.set(true);
     this.loadingMessage.set('Cargando segmentos...');
+    this.errorMessage.set('');
 
     const selectedClassIds = this.classTypes
       .filter(c => c.selected)
       .map(c => c.id);
 
-    this.segmentsService.getSegmentsTiles({
+    const params: any = {
       regionId: this.selectedRegionId,
       periodo: this.selectedPeriodo,
       classIds: selectedClassIds.length > 0 ? selectedClassIds : undefined
-    })
+    };
+
+    this.segmentsService.getSegmentsTiles(params)
     .pipe(finalize(() => {
       this.isLoading.set(false);
       this.loadingMessage.set('');
@@ -163,11 +208,21 @@ export class VisualizationSigmaComponent implements OnInit {
     .subscribe({
       next: (response) => {
         this.segmentFeatures.set(response.features);
-        this.loadingMessage.set(`${response.features.length} segmentos cargados`);
+        const modeLabel = params.periodo 
+          ? this.formatPeriodoLabel(params.periodo) 
+          : 'todos los periodos';
+        this.loadingMessage.set(`${response.features.length} segmentos cargados (${modeLabel})`);
+        
+        console.log('Segmentos cargados:', {
+          total: response.features.length,
+          periodo: params.periodo || 'todos',
+          clases: selectedClassIds.length > 0 ? selectedClassIds : 'todas'
+        });
       },
       error: (err) => {
         console.error('Error cargando segmentos:', err);
         this.errorMessage.set(err.error?.message || 'Error al cargar segmentos');
+        this.segmentFeatures.set([]);
       }
     });
   }
@@ -179,16 +234,18 @@ export class VisualizationSigmaComponent implements OnInit {
   onMonthFilterChange(): void {
     const selectedMonths = this.months.filter(m => m.selected);
     if (selectedMonths.length > 0) {
-      this.activeMonth = selectedMonths[0].id;
-      this.selectedPeriodo = selectedMonths[0].id;
-      if (this.currentScene) {
+      const selectedMonth = selectedMonths[0];
+      this.activeMonth = selectedMonth.id;
+      this.selectedPeriodo = selectedMonth.id;
+      
+      if (this.selectedRegionId) {
         this.loadSegmentsTiles();
       }
     }
   }
 
   onClassFilterChange(): void {
-    if (this.currentScene) {
+    if (this.selectedRegionId) {
       this.loadSegmentsTiles();
     }
   }
@@ -207,7 +264,10 @@ export class VisualizationSigmaComponent implements OnInit {
   setActiveMonth(monthId: string): void {
     this.activeMonth = monthId;
     this.selectedPeriodo = monthId;
-    if (this.currentScene) {
+    
+    this.months.forEach(m => m.selected = m.id === monthId);
+    
+    if (this.selectedRegionId) {
       this.loadSegmentsTiles();
     }
   }
@@ -219,14 +279,26 @@ export class VisualizationSigmaComponent implements OnInit {
     if (this.loadingMessage()) {
       return this.loadingMessage();
     }
-    const selectedMonths = this.getSelectedMonths();
-    if (selectedMonths.length > 1) {
-      const labels = selectedMonths.map(m => m.label.split(' ')[0]).join(', ');
-      return `Filtro temporal activo: ${labels}`;
-    } else if (selectedMonths.length === 1 && this.segmentFeatures().length > 0) {
-      return `Mapa segmentado: ${this.segmentFeatures().length} segmentos`;
+    
+    const features = this.segmentFeatures();
+    if (features.length === 0) {
+      if (this.availablePeriods.length === 0) {
+        return 'No hay periodos disponibles. Sube una escena TIFF para comenzar.';
+      }
+      return 'No hay segmentos para los filtros seleccionados.';
     }
-    return 'Estado: Esperando carga de escena TIFF';
+    
+    const periodoLabel = this.selectedPeriodo 
+      ? this.formatPeriodoLabel(this.selectedPeriodo)
+      : 'Sin periodo';
+    
+    const selectedClasses = this.classTypes.filter(c => c.selected).length;
+    const totalClasses = this.classTypes.length;
+    const classesLabel = selectedClasses === totalClasses 
+      ? 'todas las clases'
+      : `${selectedClasses} clases`;
+    
+    return `Mostrando ${features.length} segmentos | Período: ${periodoLabel} | Clases: ${classesLabel}`;
   }
 
   getDashboardTitle(): string {
@@ -254,7 +326,7 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   getCoverageLabel(): string {
-    return 'Superficies blandas';
+    return 'Vegetación';
   }
 
   getCoveragePercentage(): number {
@@ -262,11 +334,12 @@ export class VisualizationSigmaComponent implements OnInit {
     if (features.length === 0) return 0;
     
     const totalArea = features.reduce((sum, f) => sum + f.properties.areaM2, 0);
-    const greenArea = features
-      .filter(f => f.properties.classId === 'superficies_blandas')
+    const vegetationClasses = ['grass', 'vegetation', 'tree', 'bald-tree'];
+    const vegetationArea = features
+      .filter(f => vegetationClasses.includes(f.properties.classId))
       .reduce((sum, f) => sum + f.properties.areaM2, 0);
     
-    return totalArea > 0 ? Math.round((greenArea / totalArea) * 100) : 0;
+    return totalArea > 0 ? Math.round((vegetationArea / totalArea) * 100) : 0;
   }
 
   getClassDistribution(): ClassDistributionStat[] {
@@ -307,24 +380,33 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   getToolbarInfo(): string {
-    const selectedMonths = this.getSelectedMonths();
-    if (selectedMonths.length > 1) {
-      const labels = selectedMonths.map(m => m.label.split(' ')[0]).join(', ');
-      return `Período: ${labels} | Comparación de ${selectedMonths.length} mapas`;
+    const features = this.getFilteredFeatures();
+    if (features.length === 0) {
+      return 'No hay segmentos para mostrar';
     }
     
-    const activeMonthLabel = selectedMonths[0]?.label || 'Noviembre 2024';
-    const features = this.getFilteredFeatures();
-    const totalSegments = features.length;
-    const greenFeatures = features.filter(f => f.properties.classId === 'superficies_blandas');
-    const greenPercentage = this.getCoveragePercentage();
+    const periodoLabel = this.selectedPeriodo 
+      ? this.formatPeriodoLabel(this.selectedPeriodo)
+      : 'Todos los periodos';
     
-    return `Mapa segmentado: ${activeMonthLabel} | Total: ${totalSegments} segmentos | Superficies blandas: ${greenFeatures.length} (${greenPercentage}%)`;
+    const totalSegments = features.length;
+    const vegetationClasses = ['grass', 'vegetation', 'tree', 'bald-tree'];
+    const vegetationFeatures = features.filter(f => vegetationClasses.includes(f.properties.classId));
+    const vegetationPercentage = this.getCoveragePercentage();
+    
+    return `Período: ${periodoLabel} | Total: ${totalSegments} segmentos | Vegetación: ${vegetationFeatures.length} (${vegetationPercentage}%)`;
   }
 
   clearFilters(): void {
     this.classTypes.forEach(ct => ct.selected = true);
-    if (this.currentScene) {
+    
+    if (this.availablePeriods.length > 0) {
+      this.selectedPeriodo = this.availablePeriods[0].periodo;
+      this.activeMonth = this.selectedPeriodo;
+      this.months.forEach(m => m.selected = m.id === this.selectedPeriodo);
+    }
+    
+    if (this.selectedRegionId) {
       this.loadSegmentsTiles();
     }
   }
