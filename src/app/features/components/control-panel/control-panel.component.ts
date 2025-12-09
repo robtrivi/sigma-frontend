@@ -34,7 +34,7 @@ export class ControlPanelComponent {
 
   selectedFile: File | null = null;
   captureDate: string = '';
-  epsg: number = 32618;
+  epsg: number = 32717;
   sensor: string = 'drone_dji_phantom';
   regionId: string = 'region_norte';
 
@@ -43,19 +43,42 @@ export class ControlPanelComponent {
     const file = input.files?.[0];
     if (file) {
       this.selectedFile = file;
+      
+      if (!this.captureDate) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        this.captureDate = `${year}-${month}-${day}`;
+      }
     }
   }
 
   onUploadScene(): void {
-    if (this.selectedFile && this.captureDate && this.epsg && this.sensor && this.regionId) {
-      this.sceneUpload.emit({
-        file: this.selectedFile,
-        captureDate: this.captureDate,
-        epsg: this.epsg,
-        sensor: this.sensor,
-        regionId: this.regionId
-      });
+    if (!this.selectedFile) {
+      console.error('No se ha seleccionado archivo');
+      return;
     }
+
+    if (!this.captureDate) {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      this.captureDate = `${year}-${month}-${day}`;
+    }
+
+    this.sceneUpload.emit({
+      file: this.selectedFile,
+      captureDate: this.captureDate,
+      epsg: this.epsg,
+      sensor: this.sensor,
+      regionId: this.regionId
+    });
+  }
+
+  get canUpload(): boolean {
+    return !!this.selectedFile && !this.isLoading;
   }
 
   onRunSegmentation(): void {

@@ -17,7 +17,8 @@
     
     <div class="form-group">
       <label>Código EPSG</label>
-      <input type="number" [(ngModel)]="epsg" [disabled]="isLoading" placeholder="32618">
+      <input type="number" [(ngModel)]="epsg" [disabled]="isLoading" placeholder="32717">
+      <small class="hint">UTM Zone 17S para Ecuador (EPSG:32717)</small>
     </div>
     
     <div class="form-group">
@@ -37,7 +38,7 @@
     
     <button class="btn-upload" 
             (click)="onUploadScene()" 
-            [disabled]="!selectedFile || !captureDate || isLoading">
+            [disabled]="!canUpload">
       <i class="pi pi-cloud-upload"></i>
       {{ isLoading ? 'Cargando...' : 'Cargar y Procesar' }}
     </button>
