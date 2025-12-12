@@ -32,10 +32,11 @@
 
       <div class="content-wrapper">
         <app-leaflet-map
-          [features]="getFilteredFeatures()"
           [center]="[-2.1448, -79.9651]"
           [zoom]="15"
           [showLegend]="true"
+          [sceneId]="currentScene?.sceneId"
+          [selectedClassIds]="getSelectedClassIds()"
           (featureClick)="onFeatureClick($event)"
         ></app-leaflet-map>
 
@@ -50,7 +51,7 @@
           [usePixelCoverage]="usePixelCoverage"
           [imageResolution]="usePixelCoverage ? '512×512' : ''"
           [selectedClassIds]="getSelectedClassIds()"
-          [selectedClassesCount]="getSelectedClassIds().length"
+          [selectedClassesCount]="getSelectedClassesCountForDashboard()"
         ></app-dashboard-panel>
       </div>
 

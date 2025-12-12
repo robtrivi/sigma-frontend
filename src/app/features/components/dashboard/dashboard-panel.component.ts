@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { SegmentsService } from '../../services/segments.service';
 import { PixelCoverageItem } from '../../models/api.models';
+import { getClassColor } from '../../models/class-catalog';
 
 @Component({
   selector: 'app-dashboard-panel',
@@ -106,13 +107,38 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   }
 
   getColorForClass(className: string): string {
-    // Puedes mapear colores según el nombre de la clase
-    const colorMap: { [key: string]: string } = {
-      'Vegetación': '#6B8E23',
-      'Agua': '#1C2AA8',
-      'Sin etiqueta': '#000000',
-      // Agrega más colores según necesites
+    // Mapear nombre de clase a ID de clase para obtener el color correcto
+    const classNameToIdMap: { [key: string]: string } = {
+      'Sin etiqueta': 'unlabeled',
+      'Área pavimentada': 'paved-area',
+      'Tierra': 'dirt',
+      'Césped': 'grass',
+      'Grava': 'gravel',
+      'Agua': 'water',
+      'Rocas': 'rocks',
+      'Piscina': 'pool',
+      'Vegetación': 'vegetation',
+      'Techo': 'roof',
+      'Pared': 'wall',
+      'Ventana': 'window',
+      'Puerta': 'door',
+      'Cerca': 'fence',
+      'Poste de cerca': 'fence-pole',
+      'Persona': 'person',
+      'Perro': 'dog',
+      'Automóvil': 'car',
+      'Bicicleta': 'bicycle',
+      'Árbol': 'tree',
+      'Árbol sin hojas': 'bald-tree',
+      'Marcador AR': 'ar-marker',
+      'Obstáculo': 'obstacle',
+      'Conflicto': 'conflicting'
     };
-    return colorMap[className] || '#999999';
+    
+    // Obtener el ID de clase correspondiente
+    const classId = classNameToIdMap[className] || className.toLowerCase().replace(/\s+/g, '-');
+    
+    // Usar la función getClassColor del catalog que tiene todos los colores correctos
+    return getClassColor(classId);
   }
 }

@@ -65,7 +65,7 @@ export class VisualizationSigmaComponent implements OnInit {
     label: c.name,
     color: c.color,
     icon: c.icon,
-    selected: true
+    selected: false
   }));
 
   constructor(
@@ -355,25 +355,24 @@ export class VisualizationSigmaComponent implements OnInit {
       return this.loadingMessage();
     }
     
-    const features = this.segmentFeatures();
-    if (features.length === 0) {
+    if (!this.currentScene) {
       if (this.availablePeriods.length === 0) {
         return 'No hay periodos disponibles. Sube una escena TIFF para comenzar.';
       }
-      return 'No hay segmentos para los filtros seleccionados.';
+      return 'Selecciona una escena para visualizar la máscara.';
     }
     
     const periodoLabel = this.selectedPeriodo 
       ? this.formatPeriodoLabel(this.selectedPeriodo)
       : 'Sin periodo';
     
-    const selectedClasses = this.classTypes.filter(c => c.selected).length;
-    const totalClasses = this.classTypes.length;
-    const classesLabel = selectedClasses === totalClasses 
-      ? 'todas las clases'
-      : `${selectedClasses} clases`;
+    const selectedCount = this.getSelectedClassIds().length;
+    const totalCount = this.getSelectedClassesCountForDashboard();
+    const classesLabel = selectedCount === 0 
+      ? `${totalCount} clases`
+      : `${selectedCount} clases`;
     
-    return `Mostrando ${features.length} segmentos | Período: ${periodoLabel} | Clases: ${classesLabel}`;
+    return `Máscara cargada | Período: ${periodoLabel} | Clases: ${classesLabel}`;
   }
 
   getDashboardTitle(): string {
@@ -523,7 +522,7 @@ export class VisualizationSigmaComponent implements OnInit {
         ))
         .reduce((sum, item) => sum + item.coverage_percentage, 0);
       
-      const info = `Período: ${periodoLabel} | Resolución: 512×512 | Total píxeles: ${this.totalPixels.toLocaleString()} | Áreas Verdes: ${vegetationCoverage.toFixed(2)}%`;
+      const info = `Período: ${periodoLabel} | Total píxeles: ${this.totalPixels.toLocaleString()} | Áreas Verdes: ${vegetationCoverage.toFixed(2)}%`;
       return info;
     }
     
@@ -547,7 +546,11 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   clearFilters(): void {
-    this.classTypes.forEach(ct => ct.selected = true);
+    // Desmarcar todas las clases
+    this.classTypes.forEach(ct => ct.selected = false);
+    
+    // Emitir cambio de filtro de clases
+    this.onClassFilterChange();
     
     if (this.availablePeriods.length > 0) {
       this.selectedPeriodo = this.availablePeriods[0].periodo;
@@ -564,6 +567,13 @@ export class VisualizationSigmaComponent implements OnInit {
     return this.classTypes
       .filter(c => c.selected)
       .map(c => c.id);
+  }
+
+  getSelectedClassesCountForDashboard(): number {
+    const selectedCount = this.getSelectedClassIds().length;
+    // Si no hay clases seleccionadas, mostrar el total de clases disponibles (24)
+    // porque la máscara muestra todas las clases cuando ninguna está seleccionada
+    return selectedCount === 0 ? this.classTypes.length : selectedCount;
   }
 
   downloadReport(): void {

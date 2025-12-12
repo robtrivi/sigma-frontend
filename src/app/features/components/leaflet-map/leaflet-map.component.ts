@@ -1,23 +1,36 @@
 import { Component, Input, OnInit, OnDestroy, AfterViewInit, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { SegmentFeature } from '../../models/api.models';
 import { getClassColor, CLASS_CATALOG } from '../../models/class-catalog';
+import { environment } from '../../../../environments/environment';
+import proj4 from 'proj4';
 
 @Component({
   selector: 'app-leaflet-map',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="leaflet-map-container">
       <div id="map" class="map"></div>
-      <div class="map-legend" *ngIf="showLegend">
-        <h4>Leyenda</h4>
-        <div class="legend-item" *ngFor="let classType of classTypes">
-          <span class="legend-color" [style.background-color]="classType.color"></span>
-          <span>{{ classType.name }}</span>
+      
+      <!-- Controles de máscara -->
+      <div class="mask-controls" *ngIf="sceneId && maskLayer">
+        <div class="control-group">
+          <label>
+            <input type="checkbox" [(ngModel)]="showMask" (change)="toggleMask()">
+            Mostrar Máscara
+          </label>
+        </div>
+        <div class="control-group" *ngIf="showMask">
+          <label>Opacidad: {{ (maskOpacity * 100).toFixed(0) }}%</label>
+          <input type="range" min="0" max="1" step="0.1" 
+                 [value]="maskOpacity" (input)="onOpacityChange($event)"
+                 class="opacity-slider">
         </div>
       </div>
+      
     </div>
   `,
   styles: [`
@@ -36,52 +49,68 @@ import { getClassColor, CLASS_CATALOG } from '../../models/class-catalog';
       overflow: hidden;
       background: #f5f5f5;
     }
-    
-    .map-legend {
+
+    .mask-controls {
       position: absolute;
-      bottom: 20px;
-      right: 20px;
+      top: 20px;
+      left: 70px;
       background: white;
       padding: 15px;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
       z-index: 1000;
-      max-width: 200px;
+      min-width: 220px;
     }
-    
-    .map-legend h4 {
-      margin: 0 0 10px 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: #333;
+
+    .control-group {
+      margin-bottom: 12px;
     }
-    
-    .legend-item {
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-group label {
       display: flex;
       align-items: center;
-      margin-bottom: 8px;
-      font-size: 12px;
+      font-size: 13px;
+      color: #333;
+      cursor: pointer;
+      font-weight: 500;
     }
-    
-    .legend-color {
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
+
+    .control-group input[type="checkbox"] {
       margin-right: 8px;
-      border: 1px solid rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
+    }
+
+    .opacity-slider {
+      width: 100%;
+      margin-top: 8px;
+      cursor: pointer;
     }
   `]
 })
 export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, OnChanges {
-  @Input() features: SegmentFeature[] = [];
   @Input() center: [number, number] = [-2.1448, -79.9651];
   @Input() zoom: number = 15;
   @Input() showLegend: boolean = true;
+  @Input() sceneId?: string; // Para cargar la máscara RGB
+  @Input() selectedClassIds: string[] = []; // Clases seleccionadas para filtrar máscara
   @Output() featureClick = new EventEmitter<SegmentFeature>();
 
   private map!: L.Map;
-  private segmentsLayer?: L.GeoJSON;
+  maskLayer?: L.Layer;  // Cambiar a público para acceso desde template
   classTypes = CLASS_CATALOG;
+  
+  // Control de máscara
+  showMask: boolean = true;  // Cambiar a true para mostrar máscara por defecto
+  maskOpacity: number = 1.0;
+  private maskCenteredOnce: boolean = false; // Flag para controlar centrado inicial
+  private lastLoadedClasses: string = ''; // Para evitar cargas duplicadas
+  private isLoadingMask: boolean = false; // Para evitar múltiples requests simultáneos
 
   ngOnInit(): void {
     if (typeof window !== 'undefined') {
@@ -102,14 +131,26 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['features'] && this.map) {
-      this.updateSegments();
+    // Cargar máscara RGB cuando sceneId cambia
+    if (changes['sceneId']) {
+      if (this.map && this.sceneId) {
+        this.maskCenteredOnce = false;
+        this.lastLoadedClasses = ''; // Reset para nueva escena
+        this.loadMaskLayer();
+      }
+    }
+    // Recargar máscara cuando cambian las clases seleccionadas
+    else if (changes['selectedClassIds'] && this.map && this.sceneId) {
+      const classesStr = (this.selectedClassIds || []).join(',');
+      
+      // Solo cargar si las clases realmente cambiaron
+      if (classesStr !== this.lastLoadedClasses && !this.isLoadingMask) {
+        this.loadMaskLayer();
+      }
     }
   }
 
   private initMap(): void {
-    console.log('[LeafletMap] Inicializando mapa en:', this.center, 'zoom:', this.zoom);
-    
     this.map = L.map('map', {
       center: this.center,
       zoom: this.zoom,
@@ -120,63 +161,146 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
-
-    console.log('[LeafletMap] Mapa inicializado correctamente');
     
-    this.updateSegments();
+    // Cargar máscara si sceneId ya está disponible
+    if (this.sceneId) {
+      this.loadMaskLayer();
+    }
   }
 
-  private updateSegments(): void {   
-    if (this.segmentsLayer) {
-      this.map.removeLayer(this.segmentsLayer);
-    }
-
-    if (this.features.length === 0) {
-      console.log('[LeafletMap] No hay features para mostrar');
+  private async loadMaskLayer(): Promise<void> {
+    // Prevenir múltiples requests simultáneos
+    if (this.isLoadingMask) {
       return;
     }
 
-    const geojsonData = {
-      type: 'FeatureCollection' as const,
-      features: this.features
-    };
-
-    this.segmentsLayer = L.geoJSON(geojsonData, {
-      style: (feature) => {
-        const classId = feature?.properties?.classId || '';
-        return {
-          fillColor: getClassColor(classId),
-          weight: 2,
-          opacity: 1,
-          color: 'white',
-          fillOpacity: 0.6
-        };
-      },
-      onEachFeature: (feature, layer) => {
-        const props = feature.properties;
-        const popupContent = `
-          <div style="font-family: sans-serif;">
-            <h4 style="margin: 0 0 8px 0; color: #2d5016;">${props.className}</h4>
-            <p style="margin: 4px 0;"><strong>Área:</strong> ${props.areaM2.toFixed(2)} m²</p>
-            <p style="margin: 4px 0;"><strong>Confianza:</strong> ${(props.confidence * 100).toFixed(1)}%</p>
-            <p style="margin: 4px 0;"><strong>Período:</strong> ${props.periodo}</p>
-            <p style="margin: 4px 0;"><strong>Región:</strong> ${props.regionId}</p>
-          </div>
-        `;
-        layer.bindPopup(popupContent);
-
-        layer.on('click', () => {
-          this.featureClick.emit(feature as SegmentFeature);
-        });
-      }
-    });
-
-    this.segmentsLayer.addTo(this.map);
-
-    const bounds = this.segmentsLayer.getBounds();
-    if (bounds.isValid()) {
-      this.map.fitBounds(bounds, { padding: [50, 50] });
+    // Remover capa anterior si existe
+    if (this.maskLayer) {
+      this.map.removeLayer(this.maskLayer);
     }
+
+    if (!this.sceneId) return;
+
+    this.isLoadingMask = true;
+
+    try {
+      // Construir URL según si hay clases seleccionadas
+      let maskInfoUrl = `${environment.apiBaseUrl}/api/v1/segments/mask-info/${this.sceneId}`;
+      
+      // Si hay clases seleccionadas, usar endpoint filtrado
+      if (this.selectedClassIds && this.selectedClassIds.length > 0) {
+        const classesParam = this.selectedClassIds.join(',');
+        maskInfoUrl = `${environment.apiBaseUrl}/api/v1/segments/mask-filtered/${this.sceneId}?classes=${encodeURIComponent(classesParam)}`;
+      }
+      
+      // Guardar las clases para evitar recargas innecesarias
+      this.lastLoadedClasses = (this.selectedClassIds || []).join(',');
+
+      // Obtener información de proyección e imagen en base64
+      const infoResponse = await fetch(maskInfoUrl);
+      if (!infoResponse.ok) {
+        console.warn('[LeafletMap] No se encontró la máscara para sceneId:', this.sceneId);
+        console.warn('[LeafletMap] Status:', infoResponse.status, infoResponse.statusText);
+        return;
+      }
+
+      const maskInfo = await infoResponse.json();
+
+      // Extraer información de georeferenciación
+      const bounds: L.LatLngBoundsExpression = this._convertBounds(
+        maskInfo.bounds,
+        maskInfo.crs
+      );
+
+      // Crear ImageOverlay con la imagen base64
+      if (maskInfo.image) {
+        this.maskLayer = L.imageOverlay(maskInfo.image, bounds, {
+          opacity: this.maskOpacity,
+          interactive: false
+        });
+
+        this.maskLayer.addTo(this.map);
+        this.showMask = true;  // Mostrar automáticamente el checkbox
+
+        // Centrar en la máscara solo la primera vez
+        if (!this.maskCenteredOnce) {
+          this.map.fitBounds(bounds, { padding: [50, 50] });
+          this.maskCenteredOnce = true;
+        }
+      } else {
+        console.warn('[LeafletMap] No se recibió imagen base64');
+      }
+
+    } catch (error) {
+      console.error('[LeafletMap] Error cargando máscara:', error);
+    } finally {
+      this.isLoadingMask = false;
+    }
+  }
+
+  private _convertBounds(boundsObj: any, epsgCode: number | null): L.LatLngBoundsExpression {
+    if (!epsgCode || epsgCode === 4326) {
+      // Ya está en WGS84
+      return [
+        [boundsObj.minY, boundsObj.minX],
+        [boundsObj.maxY, boundsObj.maxX]
+      ];
+    }
+
+    // Convertir de UTM a WGS84
+    const sourceProj = `EPSG:${epsgCode}`;
+    const targetProj = 'EPSG:4326';
+
+    try {
+      const projDef = this._getProjectionDefinition(epsgCode);
+      if (projDef) {
+        proj4.defs(sourceProj, projDef);
+      }
+
+      const minXY = proj4(sourceProj, targetProj, [boundsObj.minX, boundsObj.minY]);
+      const maxXY = proj4(sourceProj, targetProj, [boundsObj.maxX, boundsObj.maxY]);
+
+      return [
+        [minXY[1], minXY[0]],
+        [maxXY[1], maxXY[0]]
+      ];
+    } catch (error) {
+      console.warn('[LeafletMap] Error en conversión, usando bounds originales:', error);
+      return [
+        [boundsObj.minY, boundsObj.minX],
+        [boundsObj.maxY, boundsObj.maxX]
+      ];
+    }
+  }
+
+  private _getProjectionDefinition(epsgCode: number): string | null {
+    // Definiciones de proyecciones comunes para Ecuador y alrededores
+    const projDefinitions: Record<number, string | null> = {
+      // UTM Zona 17 (Hemisferio Sur)
+      32717: '+proj=utm +zone=17 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      // UTM Zona 18 (Hemisferio Sur)
+      32718: '+proj=utm +zone=18 +south +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      // UTM Zona 17 (Hemisferio Norte)
+      32617: '+proj=utm +zone=17 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      // UTM Zona 18 (Hemisferio Norte)
+      32618: '+proj=utm +zone=18 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      // WGS84 (No necesita conversión)
+      4326: null
+    };
+    
+    return projDefinitions[epsgCode] || null;
+  }
+
+  private _extractUTMZone(epsgCode: number): number {
+    // Extraer zona UTM del código EPSG
+    // Códigos EPSG para UTM van de 32601-32660 para hemisferio norte
+    // y 32701-32760 para hemisferio sur
+    if (epsgCode >= 32601 && epsgCode <= 32660) {
+      return epsgCode - 32600;
+    } else if (epsgCode >= 32701 && epsgCode <= 32760) {
+      return epsgCode - 32700;
+    }
+    return 17; // Zona por defecto (Ecuador)
   }
 
   private fixLeafletIconPaths(): void {
@@ -189,5 +313,27 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       shadowSize: [41, 41]
     });
     L.Marker.prototype.options.icon = iconDefault;
+  }
+
+  toggleMask(): void {
+    if (this.maskLayer) {
+      if (this.showMask) {
+        this.maskLayer.addTo(this.map);
+      } else {
+        this.map.removeLayer(this.maskLayer);
+      }
+    }
+  }
+
+  onOpacityChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    this.maskOpacity = parseFloat(target.value);
+    this.updateMaskOpacity();
+  }
+
+  updateMaskOpacity(): void {
+    if (this.maskLayer && (this.maskLayer as any).setOpacity) {
+      (this.maskLayer as any).setOpacity(this.maskOpacity);
+    }
   }
 }

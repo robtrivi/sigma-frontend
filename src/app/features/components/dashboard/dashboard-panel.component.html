@@ -47,16 +47,18 @@
       <table class="coverage-table">
         <thead>
           <tr>
+            <th>Color</th>
             <th>Clase</th>
-            <th>Píxeles</th>
             <th>Cobertura (%)</th>
             <th>Visualización</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let item of filteredPixelCoverageData">
+            <td class="color-cell">
+              <div class="color-box" [style.background-color]="getColorForClass(item.class_name)"></div>
+            </td>
             <td>{{ item.class_name }}</td>
-            <td class="pixel-count">{{ item.pixel_count | number }}</td>
             <td class="coverage-percentage">{{ (item.pixel_count / filteredTotalPixels * 100).toFixed(2) }}%</td>
             <td class="coverage-bar">
               <div class="progress-bar-pixel">
