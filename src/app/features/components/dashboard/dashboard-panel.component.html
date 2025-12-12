@@ -3,38 +3,74 @@
     <div class="dashboard-card-title"><i class="pi pi-chart-bar"></i> {{ dashboardTitle }}</div>
     <div class="card-stat">
       <span class="stat-label">{{ statLabel }}:</span>
-      <span class="stat-value large">{{ visibleCellsCount }}</span>
+      <span class="stat-value large">{{ visibleCellsCount | number }}</span>
     </div>
-    <div class="card-stat">
+    
+    <!-- Mostrar información de píxeles cuando está disponible -->
+    <div class="card-stat" *ngIf="usePixelCoverage">
+      <span class="stat-label">Total de Clases:</span>
+      <span class="stat-value">{{ selectedClassesCount }}</span>
+    </div>
+    
+    <!-- Mostrar información de celdas cuando NO hay píxeles -->
+    <div class="card-stat" *ngIf="!usePixelCoverage">
       <span class="stat-label">Total de celdas:</span>
-      <span class="stat-value">{{ totalCells }}</span>
+      <span class="stat-value">{{ totalCells | number }}</span>
     </div>
+    
     <div class="card-stat">
       <span class="stat-label">{{ coverageLabel }}:</span>
-      <span class="stat-value">{{ coveragePercentage }}%</span>
+      <span class="stat-value">{{ coveragePercentage | number:'1.2-2' }}%</span>
     </div>
   </div>
 
-  <div class="dashboard-card">
-    <div class="dashboard-card-title"><i class="pi pi-th-large"></i> Distribución por Clase</div>
-    <div *ngFor="let stat of classDistribution">
-      <div class="card-stat">
-        <span class="stat-label"><i class="pi {{ stat.icon }}"></i> {{ stat.label }}</span>
-        <span class="stat-value">{{ stat.percentage }}%</span>
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill" [style.width.%]="stat.percentage" [style.background]="stat.gradient"></div>
-      </div>
+  <!-- ===== NUEVA SECCIÓN: COBERTURA POR PÍXELES ===== -->
+  <div class="dashboard-card" *ngIf="sceneId">
+    <div class="dashboard-card-title">
+      <i class="pi pi-objects-column"></i> Cobertura por Píxeles (512×512)
     </div>
-  </div>
 
-  <div class="dashboard-card">
-    <div class="dashboard-card-title"><i class="pi pi-chart-line"></i> Estadísticas Detalladas</div>
-    <div class="chart-container">
-      <div class="chart-bar" *ngFor="let bar of chartData">
-        <div class="bar" [style.height.%]="bar.height" [style.background]="bar.gradient"></div>
-        <div class="bar-label">{{ bar.label }}</div>
+    <div *ngIf="isLoadingCoverage" class="loading-state">
+      <i class="pi pi-spin pi-spinner"></i> Cargando análisis de píxeles...
+    </div>
+
+    <div *ngIf="coverageError" class="error-state">
+      <i class="pi pi-exclamation-circle"></i> {{ coverageError }}
+    </div>
+
+    <div *ngIf="!isLoadingCoverage && !coverageError && pixelCoverageData.length > 0">
+      <div class="coverage-header">
+        <span class="header-label">Total de píxeles:</span>
+        <span class="header-value">{{ filteredTotalPixels | number }}</span>
       </div>
+
+      <table class="coverage-table">
+        <thead>
+          <tr>
+            <th>Clase</th>
+            <th>Píxeles</th>
+            <th>Cobertura (%)</th>
+            <th>Visualización</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of filteredPixelCoverageData">
+            <td>{{ item.class_name }}</td>
+            <td class="pixel-count">{{ item.pixel_count | number }}</td>
+            <td class="coverage-percentage">{{ (item.pixel_count / filteredTotalPixels * 100).toFixed(2) }}%</td>
+            <td class="coverage-bar">
+              <div class="progress-bar-pixel">
+                <div
+                  class="progress-fill-pixel"
+                  [style.width.%]="item.pixel_count / filteredTotalPixels * 100"
+                  [style.background-color]="getColorForClass(item.class_name)"
+                ></div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
+

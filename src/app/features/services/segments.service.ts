@@ -7,7 +7,9 @@ import {
   SegmentsTilesParams, 
   SegmentsTilesResponse,
   PeriodInfo,
-  SegmentUpdateRequest
+  SegmentUpdateRequest,
+  SegmentationCoverageResponse,
+  SegmentationCoverageSummary
 } from '../models/api.models';
 
 @Injectable({
@@ -66,5 +68,33 @@ export class SegmentsService {
 
   updateSegment(segmentId: string, update: SegmentUpdateRequest): Observable<void> {
     return this.http.put<void>(`${this.baseUrl}/${segmentId}`, update);
+  }
+
+  // ===== MÉTODOS PARA ANÁLISIS DE COBERTURA POR PÍXELES =====
+
+  /**
+   * Obtiene cobertura detallada por píxeles para una escena.
+   * Incluye conteo de píxeles y porcentajes para cada clase.
+   * 
+   * @param sceneId UUID de la escena
+   * @returns Observable con cobertura completa
+   */
+  getCoverage(sceneId: string): Observable<SegmentationCoverageResponse> {
+    return this.http.get<SegmentationCoverageResponse>(
+      `${this.baseUrl}/coverage/${sceneId}`
+    );
+  }
+
+  /**
+   * Obtiene resumen rápido de cobertura (clases dominantes).
+   * Optimizado para dashboards con muchas escenas.
+   * 
+   * @param sceneId UUID de la escena
+   * @returns Observable con resumen de cobertura
+   */
+  getCoverageSummary(sceneId: string): Observable<SegmentationCoverageSummary> {
+    return this.http.get<SegmentationCoverageSummary>(
+      `${this.baseUrl}/coverage-summary/${sceneId}`
+    );
   }
 }

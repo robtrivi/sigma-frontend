@@ -9,28 +9,95 @@
       <p class="upload-hint">{{ selectedFile?.name || 'Ningún archivo seleccionado' }}</p>
     </div>
     <input #fileInput type="file" accept=".tiff,.tif" (change)="onFileSelect($event)" hidden>
+
+    <!-- Estado de validación -->
+    <div *ngIf="tiffValidating" class="validation-status loading">
+      <span><i class="pi pi-spin pi-spinner"></i> Validando TIFF...</span>
+    </div>
+
+    <div *ngIf="tiffValidationResult && !tiffValidating" [ngClass]="tiffValidationResult!.valid ? 'validation-status success' : 'validation-status error'">
+      <span *ngIf="tiffValidationResult!.valid"><i class="pi pi-check"></i> TIFF válido</span>
+      <span *ngIf="!tiffValidationResult!.valid"><i class="pi pi-times"></i> TIFF inválido</span>
+      
+      <button 
+        type="button"
+        class="info-btn"
+        (click)="toggleTiffInfo()"
+        *ngIf="tiffValidationResult"
+      >
+        <i class="pi" [ngClass]="showTiffInfo ? 'pi-chevron-up' : 'pi-chevron-down'"></i> Detalles
+      </button>
+    </div>
+
+    <!-- Detalles del TIFF -->
+    <div *ngIf="showTiffInfo && tiffValidationResult" class="tiff-details">
+      <table>
+        <tr>
+          <td><strong>Dimensiones:</strong></td>
+          <td>{{ tiffValidationResult!.width }} x {{ tiffValidationResult!.height }} px</td>
+        </tr>
+        <tr>
+          <td><strong>Bandas:</strong></td>
+          <td>{{ tiffValidationResult!.bandCount }}</td>
+        </tr>
+        <tr>
+          <td><strong>Tipo de dato:</strong></td>
+          <td>{{ tiffValidationResult!.dtype }}</td>
+        </tr>
+        <tr>
+          <td><strong>EPSG:</strong></td>
+          <td>{{ tiffValidationResult!.epsgCode || 'No especificado' }}</td>
+        </tr>
+        <tr>
+          <td><strong>Compresión:</strong></td>
+          <td>{{ tiffValidationResult!.compression || 'Ninguna' }}</td>
+        </tr>
+        <tr>
+          <td><strong>Tiempo estimado:</strong></td>
+          <td>{{ tiffValidationResult!.estimatedProcessingTimeSec?.toFixed(2) || 'N/A' }}s</td>
+        </tr>
+      </table>
+
+      <!-- Advertencias -->
+      <div *ngIf="tiffValidationResult!.warnings.length > 0" class="warnings">
+        <h5><i class="pi pi-exclamation-triangle"></i> Advertencias:</h5>
+        <ul>
+          <li *ngFor="let warning of tiffValidationResult!.warnings">{{ warning }}</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Error de validación -->
+    <div *ngIf="tiffValidationError" class="validation-error">
+      <strong><i class="pi pi-exclamation-circle"></i> Error:</strong> {{ tiffValidationError }}
+    </div>
     
-    <div class="form-group">
+    <div class="form-group" *ngIf="selectedFile">
       <label>Fecha de Captura</label>
       <input type="date" [(ngModel)]="captureDate" [disabled]="isLoading">
     </div>
     
-    <div class="form-group">
+    <div class="form-group" *ngIf="selectedFile">
       <label>Código EPSG</label>
       <input type="number" [(ngModel)]="epsg" [disabled]="isLoading" placeholder="32717">
       <small class="hint">UTM Zone 17S para Ecuador (EPSG:32717)</small>
+      <small *ngIf="tiffValidationResult?.epsgCode && tiffValidationResult?.epsgCode !== epsg" class="hint warning">
+        Nota: El archivo contiene EPSG:{{ tiffValidationResult?.epsgCode }}
+      </small>
     </div>
     
-    <div class="form-group">
+    <div class="form-group" *ngIf="selectedFile">
       <label>Sensor</label>
       <input type="text" [(ngModel)]="sensor" [disabled]="isLoading" placeholder="drone_dji_phantom">
     </div>
     
-    <div class="form-group">
+    <div class="form-group" *ngIf="selectedFile">
       <label>Región ID</label>
-      <select [(ngModel)]="regionId" [disabled]="isLoading">
+      <select [(ngModel)]="regionId" [disabled]="isLoading || regionsLoading">
+        <option value="" disabled>{{ regionsLoading ? 'Cargando regiones...' : 'Selecciona una región' }}</option>
         <option *ngFor="let region of regions" [value]="region.id">{{ region.name }}</option>
       </select>
+      <small *ngIf="regionsError" class="hint error">{{ regionsError }}</small>
     </div>
     
     <button class="btn-upload" 
@@ -40,7 +107,7 @@
       {{ isLoading ? 'Cargando...' : 'Cargar y Segmentar' }}
     </button>
     
-    <small class="info-text" *ngIf="!canRunSegmentation">
+    <small class="info-text" *ngIf="!canRunSegmentation && selectedFile">
       <i class="pi pi-info-circle"></i> La segmentación se ejecuta automáticamente al cargar la escena
     </small>
   </div>

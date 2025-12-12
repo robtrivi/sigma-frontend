@@ -43,11 +43,14 @@
           [dashboardTitle]="getDashboardTitle()"
           [statLabel]="getStatLabel()"
           [visibleCellsCount]="getVisibleSegmentsCount()"
-          [totalCells]="segmentFeatures().length"
+          [totalCells]="usePixelCoverage ? filteredTotalPixels : segmentFeatures().length"
           [coverageLabel]="getCoverageLabel()"
           [coveragePercentage]="getCoveragePercentage()"
-          [classDistribution]="getClassDistribution()"
-          [chartData]="getChartData()"
+          [sceneId]="currentScene?.sceneId"
+          [usePixelCoverage]="usePixelCoverage"
+          [imageResolution]="usePixelCoverage ? '512×512' : ''"
+          [selectedClassIds]="getSelectedClassIds()"
+          [selectedClassesCount]="getSelectedClassIds().length"
         ></app-dashboard-panel>
       </div>
 

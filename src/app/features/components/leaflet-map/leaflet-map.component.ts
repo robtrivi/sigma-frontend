@@ -126,9 +126,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     this.updateSegments();
   }
 
-  private updateSegments(): void {
-    console.log('[LeafletMap] Actualizando segmentos:', this.features.length);
-    
+  private updateSegments(): void {   
     if (this.segmentsLayer) {
       this.map.removeLayer(this.segmentsLayer);
     }
@@ -142,8 +140,6 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       type: 'FeatureCollection' as const,
       features: this.features
     };
-
-    console.log('[LeafletMap] GeoJSON data:', geojsonData);
 
     this.segmentsLayer = L.geoJSON(geojsonData, {
       style: (feature) => {

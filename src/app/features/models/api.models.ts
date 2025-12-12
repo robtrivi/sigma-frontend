@@ -35,6 +35,7 @@ export interface SegmentsTilesParams {
 
 export interface SegmentProperties {
   segmentId: string;
+  sceneId: string;
   regionId: string;
   classId: string;
   className: string;
@@ -72,4 +73,29 @@ export interface SegmentUpdateRequest {
   classId: string;
   confidence?: number;
   notes?: string;
+}
+
+// ===== INTERFACES PARA ANÁLISIS DE COBERTURA POR PÍXELES =====
+
+export interface PixelCoverageItem {
+  class_id: number;
+  class_name: string;
+  pixel_count: number;
+  coverage_percentage: number;
+}
+
+export interface SegmentationCoverageResponse {
+  scene_id: string;
+  total_pixels: number;
+  image_resolution: string;
+  coverage_by_class: PixelCoverageItem[];
+  created_at: string;
+}
+
+export interface SegmentationCoverageSummary {
+  scene_id: string;
+  dominant_class: string;
+  dominant_percentage: number;
+  secondary_class?: string;
+  secondary_percentage?: number;
 }

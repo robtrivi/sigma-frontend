@@ -11,7 +11,7 @@ import { ReportGeneratorService } from '../services/report-generator.service';
 import { ScenesService } from '../services/scenes.service';
 import { SegmentsService } from '../services/segments.service';
 import { RegionsService } from '../services/regions.service';
-import { SegmentFeature, SceneResponse, Region, PeriodInfo } from '../models/api.models';
+import { SegmentFeature, SceneResponse, Region, PeriodInfo, PixelCoverageItem, SegmentationCoverageResponse } from '../models/api.models';
 import { CLASS_CATALOG, getClassConfig } from '../models/class-catalog';
 import { finalize } from 'rxjs';
 
@@ -46,6 +46,13 @@ export class VisualizationSigmaComponent implements OnInit {
   regions: Region[] = [];
   availablePeriods: PeriodInfo[] = [];
 
+  // ===== COBERTURA POR PÍXELES =====
+  pixelCoverageData: PixelCoverageItem[] = [];
+  filteredPixelCoverageData: PixelCoverageItem[] = [];
+  totalPixels: number = 262144; // 512 * 512
+  filteredTotalPixels: number = 262144;
+  usePixelCoverage: boolean = false; // Cambiar a true cuando hay escena cargada
+
   months: MonthFilter[] = [
     { id: '2024-08', label: 'Agosto 2024', selected: false },
     { id: '2024-09', label: 'Septiembre 2024', selected: false },
@@ -79,6 +86,12 @@ export class VisualizationSigmaComponent implements OnInit {
       },
       error: (err) => console.error('Error cargando regiones:', err)
     });
+    
+    // ===== CARGAR PÍXELES SI HAY ESCENA EN SESIÓN =====
+    if (this.currentScene?.sceneId) {
+      this.loadPixelCoverage(this.currentScene.sceneId);
+    }
+    // ==================================================
   }
 
   get canRunSegmentation(): boolean {
@@ -155,6 +168,10 @@ export class VisualizationSigmaComponent implements OnInit {
         this.selectedPeriodo = periodo;
         this.loadingMessage.set('Escena cargada exitosamente. Segmentación ejecutada automáticamente.');
         
+        // ===== CARGAR COBERTURA POR PÍXELES =====
+        this.loadPixelCoverage(scene.sceneId);
+        // =========================================
+        
         this.loadAvailablePeriods();
       },
       error: (err) => {
@@ -162,6 +179,50 @@ export class VisualizationSigmaComponent implements OnInit {
         this.errorMessage.set(err.error?.message || 'Error al cargar la escena');
       }
     });
+  }
+
+  private loadPixelCoverage(sceneId: string): void {
+    this.segmentsService.getCoverage(sceneId).subscribe({
+      next: (coverage: SegmentationCoverageResponse) => {
+        this.pixelCoverageData = coverage.coverage_by_class;
+        this.totalPixels = coverage.total_pixels;
+        this.filterPixelCoverageByClass();
+        this.usePixelCoverage = true;
+      },
+      error: (err) => {
+        this.usePixelCoverage = false;
+      }
+    });
+  }
+
+  private filterPixelCoverageByClass(): void {
+    if (this.classTypes.filter(c => c.selected).length === 0) {
+      // Si no hay clases seleccionadas, mostrar todas
+      this.filteredPixelCoverageData = [...this.pixelCoverageData];
+      this.filteredTotalPixels = this.totalPixels;
+    } else {
+      // Filtrar por clases seleccionadas
+      const selectedIds = this.classTypes
+        .filter(c => c.selected)
+        .map(c => c.id);
+      
+      this.filteredPixelCoverageData = this.pixelCoverageData.filter(item => {
+        const classIdStr = this.getClassIdStringByIndex(item.class_id);
+        return selectedIds.includes(classIdStr);
+      });
+      
+      // Calcular total de píxeles filtrados
+      this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+    }
+  }
+
+  private getClassIdStringByIndex(classIndex: number): string {
+    const classIds = [
+      'unlabeled', 'paved-area', 'dirt', 'grass', 'gravel', 'water', 'rocks', 'pool',
+      'vegetation', 'roof', 'wall', 'window', 'door', 'fence', 'fence-pole', 'person',
+      'dog', 'car', 'bicycle', 'tree', 'bald-tree', 'ar-marker', 'obstacle', 'conflicting'
+    ];
+    return classIds[classIndex] || `class_${classIndex}`;
   }
 
   onRunSegmentation(): void {
@@ -213,11 +274,24 @@ export class VisualizationSigmaComponent implements OnInit {
           : 'todos los periodos';
         this.loadingMessage.set(`${response.features.length} segmentos cargados (${modeLabel})`);
         
-        console.log('Segmentos cargados:', {
-          total: response.features.length,
-          periodo: params.periodo || 'todos',
-          clases: selectedClassIds.length > 0 ? selectedClassIds : 'todas'
-        });
+        // ===== EXTRAER sceneId Y CARGAR PÍXELES =====
+        if (response.features.length > 0) {
+          const sceneId = response.features[0].properties.sceneId;
+          if (sceneId) {
+            // Simular que se cargó una escena para que el currentScene tenga valor
+            // esto es necesario para que el binding en el template funcione
+            this.currentScene = { 
+              sceneId: sceneId,
+              regionId: this.selectedRegionId,
+              captureDate: params.periodo || '',
+              epsg: 4326,
+              sensor: '',
+              rasterPath: ''
+            };
+            this.loadPixelCoverage(sceneId);
+          }
+        }
+        // ============================================
       },
       error: (err) => {
         console.error('Error cargando segmentos:', err);
@@ -228,7 +302,6 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   onFeatureClick(feature: SegmentFeature): void {
-    console.log('Feature clicked:', feature);
   }
 
   onMonthFilterChange(): void {
@@ -248,6 +321,8 @@ export class VisualizationSigmaComponent implements OnInit {
     if (this.selectedRegionId) {
       this.loadSegmentsTiles();
     }
+    // Actualizar filtrado de píxeles cuando cambian las clases
+    this.filterPixelCoverageByClass();
   }
 
   getFilteredFeatures(): SegmentFeature[] {
@@ -311,6 +386,12 @@ export class VisualizationSigmaComponent implements OnInit {
 
   getStatLabel(): string {
     const selectedMonths = this.getSelectedMonths();
+    
+    // Si hay cobertura por píxeles, mostrar eso
+    if (this.usePixelCoverage) {
+      return 'Total de Píxeles';
+    }
+    
     if (selectedMonths.length > 1) {
       return 'Períodos';
     }
@@ -319,41 +400,87 @@ export class VisualizationSigmaComponent implements OnInit {
 
   getVisibleSegmentsCount(): number {
     const selectedMonths = this.getSelectedMonths();
+    
+    // Si hay cobertura por píxeles, mostrar el total de píxeles FILTRADOS
+    if (this.usePixelCoverage) {
+      return this.filteredTotalPixels;
+    }
+    
     if (selectedMonths.length > 1) {
       return selectedMonths.length;
     }
-    return this.getFilteredFeatures().length;
+    
+    const count = this.getFilteredFeatures().length;
+    return count;
   }
 
   getCoverageLabel(): string {
-    return 'Vegetación';
+    return 'Áreas Verdes';
   }
 
   getCoveragePercentage(): number {
+    // Si hay cobertura por píxeles, usarla (FILTRADA)
+    if (this.usePixelCoverage && this.filteredPixelCoverageData.length > 0) {
+      const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
+      const vegetationCoverage = this.filteredPixelCoverageData
+        .filter(item => vegetationClasses.some(vc => 
+          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
+        ))
+        .reduce((sum, item) => sum + (item.pixel_count / this.filteredTotalPixels * 100), 0);
+      
+      return parseFloat(vegetationCoverage.toFixed(2));
+    }
+    
+    // Fallback: usar segmentos
     const features = this.getFilteredFeatures();
     if (features.length === 0) return 0;
     
-    const totalArea = features.reduce((sum, f) => sum + f.properties.areaM2, 0);
+    const totalSegments = features.length;
     const vegetationClasses = ['grass', 'vegetation', 'tree', 'bald-tree'];
-    const vegetationArea = features
+    const vegetationSegments = features
       .filter(f => vegetationClasses.includes(f.properties.classId))
-      .reduce((sum, f) => sum + f.properties.areaM2, 0);
+      .length;
     
-    return totalArea > 0 ? Math.round((vegetationArea / totalArea) * 100) : 0;
+    const percentage = totalSegments > 0 ? parseFloat(((vegetationSegments / totalSegments) * 100).toFixed(2)) : 0;
+    return percentage;
   }
 
   getClassDistribution(): ClassDistributionStat[] {
-    const features = this.getFilteredFeatures();
-    if (features.length === 0) return [];
-
-    const totalArea = features.reduce((sum, f) => sum + f.properties.areaM2, 0);
+    // Si hay cobertura por píxeles, usarla
+    if (this.usePixelCoverage && this.pixelCoverageData.length > 0) {
+      return this.pixelCoverageData
+        .map(pixelItem => {
+          // Encontrar el classType correspondiente
+          const classType = this.classTypes.find(ct => 
+            ct.id.toLowerCase().includes(pixelItem.class_name.toLowerCase()) ||
+            pixelItem.class_name.toLowerCase().includes(ct.label.toLowerCase())
+          );
+          
+          return {
+            label: pixelItem.class_name,
+            icon: classType?.icon || 'pi pi-map-marker',
+            percentage: pixelItem.coverage_percentage,
+            gradient: classType ? this.getGradient(classType.id) : 'linear-gradient(90deg, #999999, #999999dd)'
+          };
+        })
+        .filter(item => item.percentage > 0); // Solo mostrar clases con cobertura
+    }
     
-    return this.classTypes
+    // Fallback: usar segmentos
+    
+    const features = this.getFilteredFeatures();
+    if (features.length === 0) {
+      console.log('  - No hay segmentos para distribuir');
+      return [];
+    }
+
+    const totalSegments = features.length;
+    const distribution = this.classTypes
       .filter(ct => ct.selected)
       .map(classType => {
         const classFeatures = features.filter(f => f.properties.classId === classType.id);
-        const classArea = classFeatures.reduce((sum, f) => sum + f.properties.areaM2, 0);
-        const percentage = totalArea > 0 ? Math.round((classArea / totalArea) * 100) : 0;
+        const segmentCount = classFeatures.length;
+        const percentage = totalSegments > 0 ? parseFloat(((segmentCount / totalSegments) * 100).toFixed(2)) : 0;
         
         return {
           label: classType.label,
@@ -362,6 +489,9 @@ export class VisualizationSigmaComponent implements OnInit {
           gradient: this.getGradient(classType.id)
         };
       });
+    
+    console.log('  - Clases:', distribution.map(c => c.label + ' (' + c.percentage + '%)'));
+    return distribution;
   }
 
   getGradient(classId: string): string {
@@ -380,6 +510,24 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   getToolbarInfo(): string {
+    // Si hay cobertura por píxeles, mostrar eso
+    if (this.usePixelCoverage) {
+      const periodoLabel = this.selectedPeriodo 
+        ? this.formatPeriodoLabel(this.selectedPeriodo)
+        : 'Sin periodo';
+      
+      const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped'];
+      const vegetationCoverage = this.pixelCoverageData
+        .filter(item => vegetationClasses.some(vc => 
+          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
+        ))
+        .reduce((sum, item) => sum + item.coverage_percentage, 0);
+      
+      const info = `Período: ${periodoLabel} | Resolución: 512×512 | Total píxeles: ${this.totalPixels.toLocaleString()} | Áreas Verdes: ${vegetationCoverage.toFixed(2)}%`;
+      return info;
+    }
+    
+    // Fallback: usar segmentos
     const features = this.getFilteredFeatures();
     if (features.length === 0) {
       return 'No hay segmentos para mostrar';
@@ -394,7 +542,8 @@ export class VisualizationSigmaComponent implements OnInit {
     const vegetationFeatures = features.filter(f => vegetationClasses.includes(f.properties.classId));
     const vegetationPercentage = this.getCoveragePercentage();
     
-    return `Período: ${periodoLabel} | Total: ${totalSegments} segmentos | Vegetación: ${vegetationFeatures.length} (${vegetationPercentage}%)`;
+    const info = `Período: ${periodoLabel} | Total: ${totalSegments} segmentos | Áreas Verdes: ${vegetationFeatures.length} (${vegetationPercentage}%)`;
+    return info;
   }
 
   clearFilters(): void {
@@ -409,6 +558,12 @@ export class VisualizationSigmaComponent implements OnInit {
     if (this.selectedRegionId) {
       this.loadSegmentsTiles();
     }
+  }
+
+  getSelectedClassIds(): string[] {
+    return this.classTypes
+      .filter(c => c.selected)
+      .map(c => c.id);
   }
 
   downloadReport(): void {
