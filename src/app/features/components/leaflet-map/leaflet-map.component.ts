@@ -6,6 +6,7 @@ import { SegmentFeature } from '../../models/api.models';
 import { getClassColor, CLASS_CATALOG } from '../../models/class-catalog';
 import { environment } from '../../../../environments/environment';
 import proj4 from 'proj4';
+import { SegmentsService } from '../../services/segments.service';
 
 @Component({
   selector: 'app-leaflet-map',
@@ -16,11 +17,11 @@ import proj4 from 'proj4';
       <div id="map" class="map"></div>
       
       <!-- Controles de máscara -->
-      <div class="mask-controls" *ngIf="sceneId && maskLayer">
+      <div class="mask-controls" *ngIf="(sceneId && maskLayer) || (periodo && maskLayers.length > 0)">
         <div class="control-group">
           <label>
             <input type="checkbox" [(ngModel)]="showMask" (change)="toggleMask()">
-            Mostrar Máscara
+            Mostrar Máscara{{ maskLayers.length > 1 ? 's' : '' }}
           </label>
         </div>
         <div class="control-group" *ngIf="showMask">
@@ -97,20 +98,27 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   @Input() center: [number, number] = [-2.1448, -79.9651];
   @Input() zoom: number = 15;
   @Input() showLegend: boolean = true;
-  @Input() sceneId?: string; // Para cargar la máscara RGB
+  @Input() sceneId?: string; // Para cargar la máscara RGB (escena individual)
   @Input() selectedClassIds: string[] = []; // Clases seleccionadas para filtrar máscara
+  @Input() regionId?: string; // Para cargar múltiples máscaras del período
+  @Input() periodo?: string; // Período para cargar múltiples máscaras
   @Output() featureClick = new EventEmitter<SegmentFeature>();
+  @Output() multipeMasksLoaded = new EventEmitter<{ regionId: string; periodo: string }>();
 
   private map!: L.Map;
-  maskLayer?: L.Layer;  // Cambiar a público para acceso desde template
+  maskLayer?: L.Layer;  // Capa única para escena individual
+  maskLayers: L.Layer[] = [];  // Capas múltiples para período
   classTypes = CLASS_CATALOG;
   
   // Control de máscara
-  showMask: boolean = true;  // Cambiar a true para mostrar máscara por defecto
+  showMask: boolean = true;  
   maskOpacity: number = 1.0;
-  private maskCenteredOnce: boolean = false; // Flag para controlar centrado inicial
-  private lastLoadedClasses: string = ''; // Para evitar cargas duplicadas
-  private isLoadingMask: boolean = false; // Para evitar múltiples requests simultáneos
+  private maskCenteredOnce: boolean = false;
+  private lastLoadedClasses: string = '';
+  private lastMultipleMaskClasses: string = ''; // Track últimas clases usadas para máscaras múltiples
+  private isLoadingMask: boolean = false;
+
+  constructor(private segmentsService: SegmentsService) {}
 
   ngOnInit(): void {
     if (typeof window !== 'undefined') {
@@ -131,21 +139,45 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    // Cargar máscara RGB cuando sceneId cambia
-    if (changes['sceneId']) {
-      if (this.map && this.sceneId) {
-        this.maskCenteredOnce = false;
-        this.lastLoadedClasses = ''; // Reset para nueva escena
-        this.loadMaskLayer();
-      }
+    // Si no hay map aún, no hacer nada
+    if (!this.map) {
+      return;
     }
+
+    // Cargar múltiples máscaras cuando cambia el período o regionId
+    if ((changes['periodo'] || changes['regionId']) && this.periodo && this.regionId) {
+      this.maskCenteredOnce = false;
+      this.lastLoadedClasses = '';
+      this.lastMultipleMaskClasses = ''; // Reset para que las clases actuales se apliquen
+      this.clearSingleMask(); // Limpiar máscara individual si existe
+      this.clearMultipleMasks(); // Limpiar máscaras anteriores del período
+      this.loadMasksForPeriod();
+      return; // No procesar otros cambios
+    }
+
+    // Cargar máscara única cuando sceneId cambia (sin período)
+    if (changes['sceneId'] && this.sceneId && !this.periodo) {
+      this.maskCenteredOnce = false;
+      this.lastLoadedClasses = '';
+      this.clearMultipleMasks(); // Limpiar máscaras múltiples si existe
+      this.loadMaskLayer();
+      return; // No procesar otros cambios
+    }
+
     // Recargar máscara cuando cambian las clases seleccionadas
-    else if (changes['selectedClassIds'] && this.map && this.sceneId) {
+    if (changes['selectedClassIds']) {
       const classesStr = (this.selectedClassIds || []).join(',');
       
-      // Solo cargar si las clases realmente cambiaron
-      if (classesStr !== this.lastLoadedClasses && !this.isLoadingMask) {
-        this.loadMaskLayer();
+      // En modo individual (con sceneId, sin período)
+      if (this.sceneId && !this.periodo) {
+        if (classesStr !== this.lastLoadedClasses && !this.isLoadingMask) {
+          this.loadMaskLayer();
+        }
+      }
+      // En modo múltiple (con período), recargar máscaras filtradas solo si las clases realmente cambiaron
+      else if (this.periodo && this.regionId && classesStr !== this.lastMultipleMaskClasses && !this.isLoadingMask) {
+        this.lastMultipleMaskClasses = classesStr;
+        this.loadMasksForPeriod();
       }
     }
   }
@@ -184,13 +216,28 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     this.isLoadingMask = true;
 
     try {
+      // Mapeo de nombres de clases a índices numéricos (debe coincidir con el backend)
+      const CLASS_NAME_TO_ID: Record<string, number> = {
+        'unlabeled': 0, 'paved-area': 1, 'dirt': 2, 'grass': 3, 'gravel': 4,
+        'water': 5, 'rocks': 6, 'pool': 7, 'vegetation': 8, 'roof': 9,
+        'wall': 10, 'window': 11, 'door': 12, 'fence': 13, 'fence-pole': 14,
+        'person': 15, 'dog': 16, 'car': 17, 'bicycle': 18, 'tree': 19,
+        'bald-tree': 20, 'ar-marker': 21, 'obstacle': 22, 'conflicting': 23
+      };
+      
       // Construir URL según si hay clases seleccionadas
       let maskInfoUrl = `${environment.apiBaseUrl}/api/v1/segments/mask-info/${this.sceneId}`;
       
       // Si hay clases seleccionadas, usar endpoint filtrado
       if (this.selectedClassIds && this.selectedClassIds.length > 0) {
-        const classesParam = this.selectedClassIds.join(',');
-        maskInfoUrl = `${environment.apiBaseUrl}/api/v1/segments/mask-filtered/${this.sceneId}?classes=${encodeURIComponent(classesParam)}`;
+        const classNumbers = this.selectedClassIds
+          .filter(name => name in CLASS_NAME_TO_ID)
+          .map(name => CLASS_NAME_TO_ID[name])
+          .join(',');
+        
+        if (classNumbers) {
+          maskInfoUrl = `${environment.apiBaseUrl}/api/v1/segments/mask-filtered/${this.sceneId}?classes=${encodeURIComponent(classNumbers)}`;
+        }
       }
       
       // Guardar las clases para evitar recargas innecesarias
@@ -234,6 +281,92 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     } catch (error) {
       console.error('[LeafletMap] Error cargando máscara:', error);
     } finally {
+      this.isLoadingMask = false;
+    }
+  }
+
+  private clearSingleMask(): void {
+    if (this.maskLayer) {
+      this.map.removeLayer(this.maskLayer);
+      this.maskLayer = undefined;
+    }
+  }
+
+  private clearMultipleMasks(): void {
+    this.maskLayers.forEach(layer => {
+      if (this.map.hasLayer(layer)) {
+        this.map.removeLayer(layer);
+      }
+    });
+    this.maskLayers = [];
+  }
+
+  private loadMasksForPeriod(): void {
+    if (this.isLoadingMask || !this.regionId || !this.periodo) {
+      return;
+    }
+
+    this.isLoadingMask = true;
+
+    try {
+      // Pasar selectedClassIds al servicio
+      this.segmentsService.getMasksForPeriod(this.regionId, this.periodo, this.selectedClassIds).subscribe({
+        next: (response: any) => {
+          const masks = response.masks || [];
+          
+          if (masks.length === 0) {
+            console.warn('[LeafletMap] No masks found for period');
+            this.isLoadingMask = false;
+            return;
+          }
+
+          // Limpiar capas anteriores
+          this.clearMultipleMasks();
+
+          const allBounds: L.LatLngBoundsExpression[] = [];
+
+          masks.forEach((maskData: any, index: number) => {
+            try {
+              const bounds = this._convertBounds(maskData.bounds, maskData.crs);
+              
+              if (maskData.image) {
+                const layer = L.imageOverlay(maskData.image, bounds, {
+                  opacity: this.maskOpacity,
+                  interactive: false
+                });
+
+                this.maskLayers.push(layer);
+                layer.addTo(this.map);
+                allBounds.push(bounds);
+              }
+            } catch (error) {
+              console.warn(`[LeafletMap] Error loading mask ${index}:`, error);
+            }
+          });
+
+          this.showMask = true;
+
+          // Centrar en todas las máscaras la primera vez
+          if (!this.maskCenteredOnce && allBounds.length > 0) {
+            const group = new L.FeatureGroup(this.maskLayers);
+            this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
+            this.maskCenteredOnce = true;
+          }
+          
+          // Emitir evento para que el componente padre cargue píxeles agregados
+          if (this.regionId && this.periodo) {
+            this.multipeMasksLoaded.emit({ regionId: this.regionId, periodo: this.periodo });
+          }
+        },
+        error: (error: any) => {
+          console.error('[LeafletMap] Error loading masks for period:', error);
+        },
+        complete: () => {
+          this.isLoadingMask = false;
+        }
+      });
+    } catch (error) {
+      console.error('[LeafletMap] Error in loadMasksForPeriod:', error);
       this.isLoadingMask = false;
     }
   }
@@ -316,12 +449,27 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   }
 
   toggleMask(): void {
+    // Máscara única
     if (this.maskLayer) {
       if (this.showMask) {
         this.maskLayer.addTo(this.map);
       } else {
         this.map.removeLayer(this.maskLayer);
       }
+    }
+    // Múltiples máscaras
+    else if (this.maskLayers.length > 0) {
+      this.maskLayers.forEach(layer => {
+        if (this.showMask) {
+          if (!this.map.hasLayer(layer)) {
+            layer.addTo(this.map);
+          }
+        } else {
+          if (this.map.hasLayer(layer)) {
+            this.map.removeLayer(layer);
+          }
+        }
+      });
     }
   }
 
@@ -332,8 +480,17 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   }
 
   updateMaskOpacity(): void {
+    // Máscara única
     if (this.maskLayer && (this.maskLayer as any).setOpacity) {
       (this.maskLayer as any).setOpacity(this.maskOpacity);
+    }
+    // Múltiples máscaras
+    else if (this.maskLayers.length > 0) {
+      this.maskLayers.forEach(layer => {
+        if ((layer as any).setOpacity) {
+          (layer as any).setOpacity(this.maskOpacity);
+        }
+      });
     }
   }
 }

@@ -33,7 +33,6 @@ import { finalize } from 'rxjs';
 export class VisualizationSigmaComponent implements OnInit {
   uploadedFile: string = '';
   hoveredFeature: SegmentFeature | null = null;
-  activeMonth: string = 'octubre';
   showDownloadModal: boolean = false;
   isLoading = signal(false);
   loadingMessage = signal('');
@@ -52,6 +51,7 @@ export class VisualizationSigmaComponent implements OnInit {
   totalPixels: number = 262144; // 512 * 512
   filteredTotalPixels: number = 262144;
   usePixelCoverage: boolean = false; // Cambiar a true cuando hay escena cargada
+  isLoadingAggregatedCoverage: boolean = false;
 
   months: MonthFilter[] = [
     { id: '2024-08', label: 'Agosto 2024', selected: false },
@@ -59,6 +59,9 @@ export class VisualizationSigmaComponent implements OnInit {
     { id: '2024-10', label: 'Octubre 2024', selected: false },
     { id: '2024-11', label: 'Noviembre 2024', selected: true }
   ];
+  
+  // Período activo actual (usado cuando hay múltiples períodos seleccionados)
+  activeMonth: string = '2024-11'; // Inicializar con el período más reciente
 
   classTypes: ClassType[] = CLASS_CATALOG.map(c => ({
     id: c.id,
@@ -117,14 +120,17 @@ export class VisualizationSigmaComponent implements OnInit {
       next: (periods) => {
         this.availablePeriods = periods;
         
-        if (periods.length > 0 && !this.selectedPeriodo) {
-          this.selectedPeriodo = periods[0].periodo;
+        if (periods.length > 0) {
+          // Por defecto, seleccionar el período más reciente (comparando año y mes)
+          const mostRecentPeriod = this.findMostRecentPeriod(periods.map(p => p.periodo));
+          this.activeMonth = mostRecentPeriod;
+          this.selectedPeriodo = mostRecentPeriod;
         }
         
         this.months = periods.map(p => ({
           id: p.periodo,
           label: this.formatPeriodoLabel(p.periodo),
-          selected: p.periodo === this.selectedPeriodo
+          selected: p.periodo === this.selectedPeriodo // Solo el período activo
         }));
         
         if (periods.length > 0) {
@@ -132,6 +138,28 @@ export class VisualizationSigmaComponent implements OnInit {
         }
       },
       error: (err) => console.error('Error cargando periodos:', err)
+    });
+  }
+
+  /**
+   * Encuentra el período más reciente comparando año y mes
+   * Formato esperado: YYYY-MM (ej: 2025-12, 2024-11)
+   */
+  private findMostRecentPeriod(periods: string[]): string {
+    if (periods.length === 0) return '';
+    
+    return periods.reduce((mostRecent, current) => {
+      const [currentYear, currentMonth] = current.split('-').map(Number);
+      const [recentYear, recentMonth] = mostRecent.split('-').map(Number);
+      
+      // Comparar primero por año, luego por mes
+      if (currentYear > recentYear) {
+        return current;
+      } else if (currentYear === recentYear && currentMonth > recentMonth) {
+        return current;
+      }
+      
+      return mostRecent;
     });
   }
 
@@ -195,6 +223,37 @@ export class VisualizationSigmaComponent implements OnInit {
     });
   }
 
+  private loadAggregatedPixelCoverage(regionId: string, periodo: string): void {
+    if (this.isLoadingAggregatedCoverage) {
+      return;
+    }
+
+    this.isLoadingAggregatedCoverage = true;
+
+    this.segmentsService.getAggregatedPixelCoverage(regionId, periodo).subscribe({
+      next: (response: any) => {
+        // Convertir respuesta a formato PixelCoverageItem[]
+        this.pixelCoverageData = response.coverageByClass.map((item: any) => ({
+          class_id: 0, // No usamos class_id en este contexto
+          class_name: item.class_name,
+          pixel_count: item.pixel_count,
+          coverage_percentage: item.coverage_percentage
+        }));
+
+        this.totalPixels = response.totalPixels;
+        this.filterPixelCoverageByClass();
+        this.usePixelCoverage = true;
+      },
+      error: (err) => {
+        console.error('Error loading aggregated pixel coverage:', err);
+        this.usePixelCoverage = false;
+      },
+      complete: () => {
+        this.isLoadingAggregatedCoverage = false;
+      }
+    });
+  }
+
   private filterPixelCoverageByClass(): void {
     if (this.classTypes.filter(c => c.selected).length === 0) {
       // Si no hay clases seleccionadas, mostrar todas
@@ -202,13 +261,13 @@ export class VisualizationSigmaComponent implements OnInit {
       this.filteredTotalPixels = this.totalPixels;
     } else {
       // Filtrar por clases seleccionadas
-      const selectedIds = this.classTypes
+      const selectedLabels = this.classTypes
         .filter(c => c.selected)
-        .map(c => c.id);
+        .map(c => c.label.toLowerCase());
       
       this.filteredPixelCoverageData = this.pixelCoverageData.filter(item => {
-        const classIdStr = this.getClassIdStringByIndex(item.class_id);
-        return selectedIds.includes(classIdStr);
+        const itemClassName = item.class_name?.toLowerCase() || '';
+        return selectedLabels.some(label => itemClassName.includes(label));
       });
       
       // Calcular total de píxeles filtrados
@@ -245,6 +304,11 @@ export class VisualizationSigmaComponent implements OnInit {
     if (!this.selectedPeriodo && this.availablePeriods.length > 0) {
       this.selectedPeriodo = this.availablePeriods[0].periodo;
       this.months.forEach(m => m.selected = m.id === this.selectedPeriodo);
+    }
+
+    // Cargar cobertura agregada automáticamente cuando hay período
+    if (this.selectedPeriodo && this.selectedRegionId) {
+      this.loadAggregatedPixelCoverage(this.selectedRegionId, this.selectedPeriodo);
     }
 
     this.isLoading.set(true);
@@ -304,12 +368,21 @@ export class VisualizationSigmaComponent implements OnInit {
   onFeatureClick(feature: SegmentFeature): void {
   }
 
+  onMultipleMasksLoaded(event: { regionId: string; periodo: string }): void {
+    // Se llamó cuando se cargan múltiples máscaras de un período
+    // Cargar píxeles agregados del backend
+    this.loadAggregatedPixelCoverage(event.regionId, event.periodo);
+  }
+
   onMonthFilterChange(): void {
     const selectedMonths = this.months.filter(m => m.selected);
     if (selectedMonths.length > 0) {
-      const selectedMonth = selectedMonths[0];
-      this.activeMonth = selectedMonth.id;
-      this.selectedPeriodo = selectedMonth.id;
+      // Si el período activo actual ya no está seleccionado, cambiar al primero seleccionado
+      const currentActiveMonth = this.months.find(m => m.id === this.activeMonth);
+      if (!currentActiveMonth?.selected) {
+        this.activeMonth = selectedMonths[0].id;
+      }
+      this.selectedPeriodo = this.activeMonth;
       
       if (this.selectedRegionId) {
         this.loadSegmentsTiles();
@@ -318,11 +391,13 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   onClassFilterChange(): void {
-    if (this.selectedRegionId) {
+    // Solo filtrar píxeles cuando cambian las clases, no recargar
+    this.filterPixelCoverageByClass();
+    
+    // Recargar segmentos tiles solo si hay período seleccionado (no para múltiples máscaras)
+    if (this.selectedRegionId && !this.selectedPeriodo) {
       this.loadSegmentsTiles();
     }
-    // Actualizar filtrado de píxeles cuando cambian las clases
-    this.filterPixelCoverageByClass();
   }
 
   getFilteredFeatures(): SegmentFeature[] {
@@ -339,8 +414,6 @@ export class VisualizationSigmaComponent implements OnInit {
   setActiveMonth(monthId: string): void {
     this.activeMonth = monthId;
     this.selectedPeriodo = monthId;
-    
-    this.months.forEach(m => m.selected = m.id === monthId);
     
     if (this.selectedRegionId) {
       this.loadSegmentsTiles();
@@ -469,7 +542,6 @@ export class VisualizationSigmaComponent implements OnInit {
     
     const features = this.getFilteredFeatures();
     if (features.length === 0) {
-      console.log('  - No hay segmentos para distribuir');
       return [];
     }
 
@@ -489,7 +561,6 @@ export class VisualizationSigmaComponent implements OnInit {
         };
       });
     
-    console.log('  - Clases:', distribution.map(c => c.label + ' (' + c.percentage + '%)'));
     return distribution;
   }
 
@@ -549,8 +620,8 @@ export class VisualizationSigmaComponent implements OnInit {
     // Desmarcar todas las clases
     this.classTypes.forEach(ct => ct.selected = false);
     
-    // Emitir cambio de filtro de clases
-    this.onClassFilterChange();
+    // Filtrar píxeles localmente sin recargar
+    this.filterPixelCoverageByClass();
     
     if (this.availablePeriods.length > 0) {
       this.selectedPeriodo = this.availablePeriods[0].periodo;
@@ -558,7 +629,8 @@ export class VisualizationSigmaComponent implements OnInit {
       this.months.forEach(m => m.selected = m.id === this.selectedPeriodo);
     }
     
-    if (this.selectedRegionId) {
+    // Solo recargar segmentos tiles si no estamos en modo múltiples máscaras
+    if (this.selectedRegionId && !this.selectedPeriodo) {
       this.loadSegmentsTiles();
     }
   }

@@ -36,8 +36,11 @@
           [zoom]="15"
           [showLegend]="true"
           [sceneId]="currentScene?.sceneId"
+          [regionId]="selectedRegionId"
+          [periodo]="selectedPeriodo"
           [selectedClassIds]="getSelectedClassIds()"
           (featureClick)="onFeatureClick($event)"
+          (multipeMasksLoaded)="onMultipleMasksLoaded($event)"
         ></app-leaflet-map>
 
         <app-dashboard-panel
@@ -52,6 +55,8 @@
           [imageResolution]="usePixelCoverage ? '512×512' : ''"
           [selectedClassIds]="getSelectedClassIds()"
           [selectedClassesCount]="getSelectedClassesCountForDashboard()"
+          [pixelCoverageDataInput]="filteredPixelCoverageData"
+          [totalPixelsInput]="filteredTotalPixels"
         ></app-dashboard-panel>
       </div>
 

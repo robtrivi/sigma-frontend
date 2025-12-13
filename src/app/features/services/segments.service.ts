@@ -97,4 +97,42 @@ export class SegmentsService {
       `${this.baseUrl}/coverage-summary/${sceneId}`
     );
   }
+
+  getMasksForPeriod(regionId: string, periodo: string, selectedClassIds?: string[]): Observable<any> {
+    let params = new HttpParams().set('periodo', periodo);
+    
+    // Pasar clases seleccionadas si existen
+    if (selectedClassIds && selectedClassIds.length > 0) {
+      // Mapear nombres de clases a índices numéricos
+      const CLASS_NAME_TO_ID: Record<string, number> = {
+        'unlabeled': 0, 'paved-area': 1, 'dirt': 2, 'grass': 3, 'gravel': 4,
+        'water': 5, 'rocks': 6, 'pool': 7, 'vegetation': 8, 'roof': 9,
+        'wall': 10, 'window': 11, 'door': 12, 'fence': 13, 'fence-pole': 14,
+        'person': 15, 'dog': 16, 'car': 17, 'bicycle': 18, 'tree': 19,
+        'bald-tree': 20, 'ar-marker': 21, 'obstacle': 22, 'conflicting': 23
+      };
+      
+      const classNumbers = selectedClassIds
+        .filter(name => name in CLASS_NAME_TO_ID)
+        .map(name => CLASS_NAME_TO_ID[name])
+        .join(',');
+      
+      if (classNumbers) {
+        params = params.set('classes', classNumbers);
+      }
+    }
+    
+    return this.http.get<any>(
+      `${this.baseUrl}/masks-by-period/${regionId}`,
+      { params }
+    );
+  }
+
+  getAggregatedPixelCoverage(regionId: string, periodo: string): Observable<any> {
+    const params = new HttpParams().set('periodo', periodo);
+    return this.http.get<any>(
+      `${this.baseUrl}/pixel-coverage-aggregated/${regionId}`,
+      { params }
+    );
+  }
 }

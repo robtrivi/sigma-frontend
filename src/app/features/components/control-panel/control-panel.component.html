@@ -131,11 +131,11 @@
   <div class="section">
     <div class="filter-title">Filtro Temporal - Período:</div>
     <div class="filter-group">
-      <div class="radio-item" *ngFor="let month of months" (click)="selectSingleMonth(month)">
-        <input type="radio" 
+      <div class="checkbox-item" *ngFor="let month of months" (click)="toggleMonth(month)">
+        <input type="checkbox" 
                [id]="'month-' + month.id" 
-               name="periodo-filter"
                [checked]="month.selected"
+               [disabled]="isMonthDisabled(month)"
                readonly>
         <label [for]="'month-' + month.id">{{ month.label }}</label>
       </div>

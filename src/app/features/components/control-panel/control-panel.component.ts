@@ -70,7 +70,6 @@ export class ControlPanelComponent implements OnInit {
         } else {
           this.regionsError = 'No hay regiones disponibles';
         }
-        console.log(`Regiones cargadas: ${regions.length}`, regions);
       },
       error: (err) => {
         this.regionsLoading = false;
@@ -120,15 +119,11 @@ export class ControlPanelComponent implements OnInit {
         } else {
           // TIFF válido - limpiar error aunque haya advertencias
           this.tiffValidationError = null;
-          if (result.warnings.length > 0) {
-            console.warn('Advertencias en TIFF (se puede proceder):', result.warnings);
-          }
         }
 
         // Auto-llenar EPSG si está disponible en el TIFF
         if (result.epsgCode && result.epsgCode !== this.epsg) {
           this.epsg = result.epsgCode;
-          console.info(`EPSG auto-llenado desde archivo: ${result.epsgCode}`);
         }
       },
       error: (err) => {
@@ -203,10 +198,21 @@ export class ControlPanelComponent implements OnInit {
     this.monthFilterChange.emit();
   }
 
-  selectSingleMonth(selectedMonth: MonthFilter): void {
-    this.months.forEach(m => m.selected = false);
-    selectedMonth.selected = true;
+  toggleMonth(selectedMonth: MonthFilter): void {
+    const selectedCount = this.months.filter(m => m.selected).length;
+    
+    // Si es el único seleccionado y intenta deseleccionarlo, no lo permite
+    if (selectedMonth.selected && selectedCount === 1) {
+      return;
+    }
+    
+    selectedMonth.selected = !selectedMonth.selected;
     this.monthFilterChange.emit();
+  }
+
+  isMonthDisabled(month: MonthFilter): boolean {
+    // Desabilitar si es el único seleccionado
+    return month.selected && this.months.filter(m => m.selected).length === 1;
   }
 
   notifyClassChange(): void {

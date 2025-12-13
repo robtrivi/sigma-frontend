@@ -25,6 +25,8 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   @Input() imageResolution: string = '';
   @Input() selectedClassIds: string[] = []; // Clases seleccionadas para filtrado
   @Input() selectedClassesCount: number = 0; // Cantidad de clases seleccionadas
+  @Input() pixelCoverageDataInput: PixelCoverageItem[] = []; // Datos de cobertura del componente padre
+  @Input() totalPixelsInput: number = 0; // Total de píxeles del componente padre
   
   pixelCoverageData: PixelCoverageItem[] = [];
   filteredPixelCoverageData: PixelCoverageItem[] = [];
@@ -42,7 +44,14 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    // Cuando sceneId cambia, cargar los datos
+    // Cuando los datos vienen del componente padre (múltiples máscaras agregadas)
+    if (changes['pixelCoverageDataInput'] && this.pixelCoverageDataInput.length > 0) {
+      this.pixelCoverageData = [...this.pixelCoverageDataInput];
+      this.totalPixels = this.totalPixelsInput > 0 ? this.totalPixelsInput : 262144;
+      this.filterPixelCoverageByClass();
+    }
+    
+    // Cuando sceneId cambia, cargar los datos individuales
     if (changes['sceneId'] && !changes['sceneId'].firstChange) {
       if (this.sceneId) {
         this.loadPixelCoverage();
