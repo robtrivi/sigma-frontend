@@ -50,6 +50,8 @@
           [totalCells]="usePixelCoverage ? filteredTotalPixels : segmentFeatures().length"
           [coverageLabel]="getCoverageLabel()"
           [coveragePercentage]="getCoveragePercentage()"
+          [coverageAreaM2]="getCoverageAreaM2()"
+          [selectedPeriodo]="getSelectedPeriodoLabel()"
           [sceneId]="currentScene?.sceneId"
           [usePixelCoverage]="usePixelCoverage"
           [imageResolution]="usePixelCoverage ? '512×512' : ''"

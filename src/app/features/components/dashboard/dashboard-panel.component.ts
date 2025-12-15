@@ -18,6 +18,8 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   @Input({ required: true }) totalCells: number = 0;
   @Input({ required: true }) coverageLabel: string = '';
   @Input({ required: true }) coveragePercentage: number = 0;
+  @Input() coverageAreaM2: number = 0;  // Área en metros cuadrados del elemento de cobertura
+  @Input() selectedPeriodo: string = ''; // Período seleccionado
   
   // ===== COBERTURA POR PÍXELES =====
   @Input() sceneId?: string;
@@ -31,9 +33,13 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   pixelCoverageData: PixelCoverageItem[] = [];
   filteredPixelCoverageData: PixelCoverageItem[] = [];
   totalPixels: number = 262144; // 512 * 512
+  totalAreaM2: number = 262144.0;  // Área total en m²
+  pixelAreaM2: number = 1.0;  // Área por píxel en m²
   filteredTotalPixels: number = 262144;
+  filteredTotalAreaM2: number = 262144.0;
   isLoadingCoverage: boolean = false;
   coverageError?: string;
+  dataLoaded: boolean = false;  // Flag para rastrear si los datos han sido cargados
 
   constructor(private segmentsService: SegmentsService) {}
 
@@ -45,21 +51,27 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     // Cuando los datos vienen del componente padre (múltiples máscaras agregadas)
-    if (changes['pixelCoverageDataInput'] && this.pixelCoverageDataInput.length > 0) {
-      this.pixelCoverageData = [...this.pixelCoverageDataInput];
-      this.totalPixels = this.totalPixelsInput > 0 ? this.totalPixelsInput : 262144;
-      this.filterPixelCoverageByClass();
+    // PERO solo si no tenemos datos del API (sceneId)
+    if (changes['pixelCoverageDataInput'] && this.pixelCoverageDataInput && this.pixelCoverageDataInput.length > 0) {
+      // Solo asignar si no hay sceneId (no se están cargando datos del API)
+      if (!this.sceneId) {
+        this.pixelCoverageData = [...this.pixelCoverageDataInput];
+        this.totalPixels = this.totalPixelsInput > 0 ? this.totalPixelsInput : 262144;
+        this.dataLoaded = true;
+        this.filterPixelCoverageByClass();
+      }
     }
     
     // Cuando sceneId cambia, cargar los datos individuales
     if (changes['sceneId'] && !changes['sceneId'].firstChange) {
       if (this.sceneId) {
+        this.dataLoaded = false;  // Resetear flag cuando sceneId cambia
         this.loadPixelCoverage();
       }
     }
     
-    // Cuando selectedClassIds cambia, filtrar los datos
-    if (changes['selectedClassIds']) {
+    // Cuando selectedClassIds cambia, filtrar SOLO si los datos han sido cargados
+    if (changes['selectedClassIds'] && this.dataLoaded && this.pixelCoverageData && this.pixelCoverageData.length > 0) {
       this.filterPixelCoverageByClass();
     }
   }
@@ -69,42 +81,56 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
 
     this.isLoadingCoverage = true;
     this.coverageError = undefined;
+    this.dataLoaded = false;  // Marcar como no cargado
 
     this.segmentsService.getCoverage(this.sceneId).subscribe({
       next: (coverage) => {
-        this.pixelCoverageData = coverage.coverage_by_class;
-        this.totalPixels = coverage.total_pixels;
+        // Asignar directamente sin transformación compleja
+        this.pixelCoverageData = coverage.coverage_by_class || [];
+        this.totalPixels = coverage.total_pixels ?? 262144;
+        this.totalAreaM2 = coverage.total_area_m2 ?? 262144.0;
+        this.pixelAreaM2 = coverage.pixel_area_m2 ?? 1.0;
+        
+        // Marcar como cargado ANTES de filtrar
+        this.dataLoaded = true;
+        
         this.filterPixelCoverageByClass();
         this.isLoadingCoverage = false;
       },
       error: (error) => {
         this.coverageError = 'Error al cargar cobertura por píxeles';
         this.isLoadingCoverage = false;
+        this.dataLoaded = false;
       }
     });
   }
 
   private filterPixelCoverageByClass(): void {
+    if (!this.pixelCoverageData || this.pixelCoverageData.length === 0) {
+      return;
+    }
+
     if (this.selectedClassIds.length === 0) {
       // Si no hay clases seleccionadas, mostrar todas
       this.filteredPixelCoverageData = [...this.pixelCoverageData].sort((a, b) => 
         (b.coverage_percentage || 0) - (a.coverage_percentage || 0)
       );
       this.filteredTotalPixels = this.totalPixels;
+      this.filteredTotalAreaM2 = this.totalAreaM2;
     } else {
       // Filtrar por clases seleccionadas
-      // selectedClassIds contiene strings como 'grass', 'vegetation', etc.
-      this.filteredPixelCoverageData = this.pixelCoverageData.filter(item => {
-        // Buscar si el class_id (numérico) coincide con alguna clase seleccionada
-        // Usamos la posición en CLASS_CATALOG para mapear class_id
-        const classIdStr = this.getClassIdStringByIndex(item.class_id);
-        return this.selectedClassIds.includes(classIdStr);
-      }).sort((a, b) => 
-        (b.coverage_percentage || 0) - (a.coverage_percentage || 0)
-      );
+      this.filteredPixelCoverageData = this.pixelCoverageData
+        .filter(item => {
+          const classIdStr = this.getClassIdStringByIndex(item.class_id);
+          return this.selectedClassIds.includes(classIdStr);
+        })
+        .sort((a, b) => 
+          (b.coverage_percentage || 0) - (a.coverage_percentage || 0)
+        );
       
-      // Calcular total de píxeles filtrados
+      // Calcular total de píxeles y área filtrados
       this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
     }
   }
 

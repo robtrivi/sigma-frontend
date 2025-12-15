@@ -57,6 +57,8 @@ export class VisualizationSigmaComponent implements OnInit {
   pixelCoverageData: PixelCoverageItem[] = [];
   filteredPixelCoverageData: PixelCoverageItem[] = [];
   totalPixels: number = 262144; // 512 * 512
+  totalAreaM2: number = 262144.0;  // Área total en m²
+  pixelAreaM2: number = 1.0;  // Área por píxel en m²
   filteredTotalPixels: number = 262144;
   usePixelCoverage: boolean = false; // Cambiar a true cuando hay escena cargada
   isLoadingAggregatedCoverage: boolean = false;
@@ -242,6 +244,8 @@ export class VisualizationSigmaComponent implements OnInit {
       next: (coverage: SegmentationCoverageResponse) => {
         this.pixelCoverageData = coverage.coverage_by_class;
         this.totalPixels = coverage.total_pixels;
+        this.totalAreaM2 = coverage.total_area_m2 ?? 262144.0;
+        this.pixelAreaM2 = coverage.pixel_area_m2 ?? 1.0;
         this.filterPixelCoverageByClass();
         this.usePixelCoverage = true;
       },
@@ -265,10 +269,13 @@ export class VisualizationSigmaComponent implements OnInit {
           class_id: 0, // No usamos class_id en este contexto
           class_name: item.class_name,
           pixel_count: item.pixel_count,
-          coverage_percentage: item.coverage_percentage
+          coverage_percentage: item.coverage_percentage,
+          area_m2: item.area_m2 || 0
         }));
 
         this.totalPixels = response.totalPixels;
+        this.totalAreaM2 = response.totalAreaM2 ?? 262144.0;
+        this.pixelAreaM2 = response.pixelAreaM2 ?? 1.0;
         this.filterPixelCoverageByClass();
         this.usePixelCoverage = true;
       },
@@ -463,25 +470,17 @@ export class VisualizationSigmaComponent implements OnInit {
       return 'Selecciona una escena para visualizar la máscara.';
     }
     
-    const periodoLabel = this.selectedPeriodo 
+    return 'Máscara cargada';
+  }
+
+  getSelectedPeriodoLabel(): string {
+    return this.selectedPeriodo 
       ? this.formatPeriodoLabel(this.selectedPeriodo)
       : 'Sin periodo';
-    
-    const selectedCount = this.getSelectedClassIds().length;
-    const totalCount = this.getSelectedClassesCountForDashboard();
-    const classesLabel = selectedCount === 0 
-      ? `${totalCount} clases`
-      : `${selectedCount} clases`;
-    
-    return `Máscara cargada | Período: ${periodoLabel} | Clases: ${classesLabel}`;
   }
 
   getDashboardTitle(): string {
-    const selectedMonths = this.getSelectedMonths();
-    if (selectedMonths.length > 1) {
-      return 'Resumen Temporal';
-    }
-    return 'Resumen del Mapa';
+    return 'Datos Generales';
   }
 
   getStatLabel(): string {
@@ -543,6 +542,23 @@ export class VisualizationSigmaComponent implements OnInit {
     
     const percentage = totalSegments > 0 ? parseFloat(((vegetationSegments / totalSegments) * 100).toFixed(2)) : 0;
     return percentage;
+  }
+
+  getCoverageAreaM2(): number {
+    // Obtener el área en m² de vegetación usando los mismos criterios que getCoveragePercentage
+    if (this.usePixelCoverage && this.filteredPixelCoverageData.length > 0) {
+      const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
+      const vegetationAreaM2 = this.filteredPixelCoverageData
+        .filter(item => vegetationClasses.some(vc => 
+          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
+        ))
+        .reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+      
+      return parseFloat(vegetationAreaM2.toFixed(2));
+    }
+    
+    // Fallback: retornar 0 si no hay cobertura por píxeles
+    return 0;
   }
 
   getClassDistribution(): ClassDistributionStat[] {
@@ -621,7 +637,7 @@ export class VisualizationSigmaComponent implements OnInit {
         ))
         .reduce((sum, item) => sum + item.coverage_percentage, 0);
       
-      const info = `Período: ${periodoLabel} | Total píxeles: ${this.totalPixels.toLocaleString()} | Áreas Verdes: ${vegetationCoverage.toFixed(2)}%`;
+      const info = `Período: ${periodoLabel} | Área total (m²): ${this.totalAreaM2.toFixed(2)} | Áreas Verdes: ${vegetationCoverage.toFixed(2)}%`;
       return info;
     }
     

@@ -1,37 +1,55 @@
 <div class="dashboard-section">
   <div class="dashboard-card">
     <div class="dashboard-card-title"><i class="pi pi-chart-bar"></i> {{ dashboardTitle }}</div>
-    <div class="card-stat">
+    
+    <!-- Mostrar área total cuando hay cobertura por píxeles -->
+    <div class="card-stat" *ngIf="usePixelCoverage">
+      <span class="stat-label">Área total (m²):</span>
+      <span class="stat-value large">{{ (selectedClassIds.length > 0 ? filteredTotalAreaM2 : totalAreaM2) | number:'1.2-2' }}</span>
+    </div>
+    
+    <!-- Mostrar conteo de celdas cuando NO hay cobertura por píxeles -->
+    <div class="card-stat" *ngIf="!usePixelCoverage">
       <span class="stat-label">{{ statLabel }}:</span>
       <span class="stat-value large">{{ visibleCellsCount | number }}</span>
     </div>
     
-    <!-- Mostrar información de píxeles cuando está disponible -->
+    <!-- Mostrar información de clases cuando hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="usePixelCoverage">
+      <span class="stat-label">{{ coverageLabel }}:</span>
+      <span class="stat-value">{{ coverageAreaM2 | number:'1.2-2' }} m² ({{ coveragePercentage | number:'1.2-2' }}%)</span>
+    </div>
+
+    <div class="card-stat" *ngIf="usePixelCoverage && selectedPeriodo">
+      <span class="stat-label">Período:</span>
+      <span class="stat-value">{{ selectedPeriodo }}</span>
+    </div>
+
+    <div class="card-stat">
       <span class="stat-label">Total de Clases:</span>
       <span class="stat-value">{{ selectedClassesCount }}</span>
     </div>
     
-    <!-- Mostrar información de celdas cuando NO hay píxeles -->
+    <!-- Mostrar información de celdas cuando NO hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="!usePixelCoverage">
       <span class="stat-label">Total de celdas:</span>
       <span class="stat-value">{{ totalCells | number }}</span>
     </div>
-    
-    <div class="card-stat">
+
+    <div class="card-stat" *ngIf="!usePixelCoverage">
       <span class="stat-label">{{ coverageLabel }}:</span>
-      <span class="stat-value">{{ coveragePercentage | number:'1.2-2' }}%</span>
+      <span class="stat-value">{{ coverageAreaM2 | number:'1.2-2' }} m² ({{ coveragePercentage | number:'1.2-2' }}%)</span>
     </div>
   </div>
 
   <!-- ===== NUEVA SECCIÓN: COBERTURA POR PÍXELES ===== -->
   <div class="dashboard-card" *ngIf="sceneId">
     <div class="dashboard-card-title">
-      <i class="pi pi-objects-column"></i> Cobertura por Píxeles (512×512)
+      <i class="pi pi-objects-column"></i> Cobertura de Área (m²)
     </div>
 
     <div *ngIf="isLoadingCoverage" class="loading-state">
-      <i class="pi pi-spin pi-spinner"></i> Cargando análisis de píxeles...
+      <i class="pi pi-spin pi-spinner"></i> Cargando análisis de área...
     </div>
 
     <div *ngIf="coverageError" class="error-state">
@@ -40,8 +58,8 @@
 
     <div *ngIf="!isLoadingCoverage && !coverageError && pixelCoverageData.length > 0">
       <div class="coverage-header">
-        <span class="header-label">Total de píxeles:</span>
-        <span class="header-value">{{ filteredTotalPixels | number }}</span>
+        <span class="header-label">Área total (m²):</span>
+        <span class="header-value">{{ filteredTotalAreaM2 | number:'1.2-2' }}</span>
       </div>
 
       <table class="coverage-table">
@@ -49,6 +67,7 @@
           <tr>
             <th>Color</th>
             <th>Clase</th>
+            <th>Área (m²)</th>
             <th>Cobertura (%)</th>
             <th>Visualización</th>
           </tr>
@@ -59,6 +78,7 @@
               <div class="color-box" [style.background-color]="getColorForClass(item.class_name)"></div>
             </td>
             <td>{{ item.class_name }}</td>
+            <td class="area-m2">{{ (item.area_m2 || 0) | number:'1.2-2' }}</td>
             <td class="coverage-percentage">{{ (item.pixel_count / filteredTotalPixels * 100).toFixed(2) }}%</td>
             <td class="coverage-bar">
               <div class="progress-bar-pixel">

@@ -75,18 +75,21 @@ export interface SegmentUpdateRequest {
   notes?: string;
 }
 
-// ===== INTERFACES PARA ANÁLISIS DE COBERTURA POR PÍXELES =====
+// ===== INTERFACES PARA ANÁLISIS DE COBERTURA POR PÍXELES Y ÁREA EN M² =====
 
 export interface PixelCoverageItem {
   class_id: number;
   class_name: string;
   pixel_count: number;
   coverage_percentage: number;
+  area_m2?: number;  // Área en metros cuadrados
 }
 
 export interface SegmentationCoverageResponse {
   scene_id: string;
   total_pixels: number;
+  total_area_m2?: number;
+  pixel_area_m2?: number;
   image_resolution: string;
   coverage_by_class: PixelCoverageItem[];
   created_at: string;
