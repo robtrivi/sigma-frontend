@@ -113,19 +113,7 @@
   </div>
 
   <div class="section">
-    <div class="section-title">Segmento Resaltado</div>
-    <div class="hovered-region" *ngIf="hoveredFeature; else hoveredFallback">
-      <strong><i class="pi pi-map-marker"></i> {{ hoveredFeature.properties.className }}</strong>
-      <p><strong>Área:</strong> {{ hoveredFeature.properties.areaM2.toFixed(2) }} m²</p>
-      <p><strong>Confianza:</strong> {{ (hoveredFeature.properties.confidence * 100).toFixed(1) }}%</p>
-      <p><strong>Período:</strong> {{ hoveredFeature.properties.periodo }}</p>
-    </div>
-    <ng-template #hoveredFallback>
-      <div class="hovered-region">
-        <strong><i class="pi pi-map-marker"></i> Pasa mouse sobre un segmento</strong>
-        <p>Se mostrarán detalles del segmento aquí.</p>
-      </div>
-    </ng-template>
+    <div class="section-title">Aplicar Filtros</div>
   </div>
 
   <div class="section">

@@ -2,6 +2,13 @@ import { Injectable } from '@angular/core';
 import { MapCell } from '../models/visualization.models';
 import { PixelCoverageItem } from '../models/api.models';
 
+export interface MaskData {
+  sceneId?: string;
+  captureDate?: string;
+  imageUrl: string;
+  pixelCoverageData: PixelCoverageItem[];
+}
+
 export interface ReportOptions {
   format: 'pdf' | 'csv';
   content: string[];
@@ -13,7 +20,9 @@ export interface ReportOptions {
   vegetationCoveragePercentage?: number;
   vegetationAreaM2?: number;
   totalAreaM2?: number;
-  maskImageUrl?: string;  // URL de la máscara actual de Leaflet
+  maskImageUrl?: string;  // URL de la máscara actual de Leaflet (para modo individual)
+  multipleMasks?: MaskData[];  // Array de máscaras para modo múltiple
+  isMultipleMasks?: boolean;  // Flag indicando si es modo múltiples máscaras
 }
 
 @Injectable({
@@ -197,14 +206,24 @@ export class ReportGeneratorService {
       let classesContent = '';
       
       if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
-        const totalPixels = options.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+        // Usar datos filtrados (sin "Sin etiqueta") para la tabla
+        const dataToDisplay = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 
+          ? options.filteredPixelCoverageData 
+          : options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
+        
+        // Calcular área total filtrada
+        const totalAreaFiltered = dataToDisplay.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+        
+        // Ordenar por área descendente (igual que en el dashboard)
+        const sortedData = [...dataToDisplay].sort((a, b) => (b.area_m2 || 0) - (a.area_m2 || 0));
+        
         classesContent = `
         <div class="section">
           <div class="section-title">Cobertura de Área (m²)</div>
           <div style="margin-top: 15px;">
             <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 2px solid #f0f0f0; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #2d5016;">
               <span>Área total (m²):</span>
-              <span>${(options.filteredPixelCoverageData?.reduce((sum, item) => sum + (item.area_m2 || 0), 0) || 0).toFixed(2)}</span>
+              <span>${totalAreaFiltered.toFixed(2)}</span>
             </div>
           </div>
           <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;">
@@ -220,8 +239,8 @@ export class ReportGeneratorService {
             <tbody>
       `;
         
-        options.pixelCoverageData.forEach(item => {
-          const percentage = totalPixels > 0 ? ((item.pixel_count / totalPixels) * 100).toFixed(2) : '0.00';
+        sortedData.forEach(item => {
+          const percentage = totalAreaFiltered > 0 ? ((item.area_m2 || 0) / totalAreaFiltered * 100).toFixed(2) : '0.00';
           const classColor = this.getColorForClass(item.class_name);
           classesContent += `
               <tr style="border-bottom: 1px solid #f0f0f0;">
@@ -229,7 +248,7 @@ export class ReportGeneratorService {
                   <div style="width: 20px; height: 20px; border-radius: 3px; background-color: ${classColor}; border: 1px solid #ccc; display: inline-block; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
                 </td>
                 <td style="padding: 8px 6px; font-size: 12px;">${item.class_name}</td>
-                <td style="padding: 8px 4px; text-align: right; font-size: 12px;">${(item.area_m2 || 0).toFixed(1)}</td>
+                <td style="padding: 8px 4px; text-align: right; font-size: 12px;">${(item.area_m2 || 0).toFixed(2)}</td>
                 <td style="padding: 8px 4px; text-align: center; font-weight: 600; color: #2d5016; font-size: 12px;">${percentage}%</td>
                 <td style="padding: 8px 6px;">
                   <div style="width: 100%; height: 16px; background-color: #f0f0f0; border-radius: 2px; overflow: hidden; border: 1px solid #ddd; print-color-adjust: exact; -webkit-print-color-adjust: exact;">
@@ -297,9 +316,34 @@ export class ReportGeneratorService {
 
     // Mapa Segmentado
     if (options.content.includes('map')) {
-      if (options.maskImageUrl && options.maskImageUrl.trim() !== '') {
-        // Si hay una imagen de máscara válida, mostrarla
-        const mapContent = `
+      let mapContent = '';
+      
+      // Si hay máscaras múltiples, mostrarlas todas
+      if (options.isMultipleMasks && options.multipleMasks && options.multipleMasks.length > 0) {
+        mapContent = `
+        <div class="section" style="page-break-inside: avoid;">
+          <div class="section-title">Mapas Segmentados de Múltiples Escenas</div>
+          <p style="font-size: 12px; color: #666; margin-bottom: 15px;">Se muestran las imágenes de segmentación de las ${options.multipleMasks.length} escena(s) analizadas en el período seleccionado:</p>
+      `;
+        
+        options.multipleMasks.forEach((mask, index) => {
+          mapContent += `
+          <div style="margin-bottom: 20px; page-break-inside: avoid;">
+            <h3 style="font-size: 13px; font-weight: 600; color: #2d5016; margin-bottom: 8px;">Escena ${index + 1}</h3>
+            <div style="text-align: center; margin: 15px 0;">
+              <img src="${mask.imageUrl}" style="max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 6px; display: block; margin: 0 auto;">
+            </div>
+            <p style="font-size: 11px; color: #999; text-align: center; margin-top: 8px;">Segmentación de ${mask.sceneId}</p>
+          </div>
+        `;
+        });
+        
+        mapContent += `
+        </div>
+      `;
+      } else if (options.maskImageUrl && options.maskImageUrl.trim() !== '') {
+        // Si hay una imagen de máscara individual válida, mostrarla
+        mapContent = `
         <div class="section" style="page-break-inside: avoid;">
           <div class="section-title">Mapa Segmentado</div>
           <div style="text-align: center; margin: 20px 0; page-break-inside: avoid;">
@@ -308,6 +352,9 @@ export class ReportGeneratorService {
           <p style="font-size: 12px; color: #666; margin-top: 10px; text-align: center;">Imagen de segmentación del área analizada según los filtros aplicados en el período seleccionado.</p>
         </div>
       `;
+      }
+      
+      if (mapContent) {
         content += mapContent;
       }
     }
@@ -449,6 +496,15 @@ export class ReportGeneratorService {
     if (options.content.includes('map')) {
       csv += 'MAPA SEGMENTADO\n';
       
+      // Si hay máscaras múltiples, registrar información de cada una
+      if (options.isMultipleMasks && options.multipleMasks && options.multipleMasks.length > 0) {
+        csv += 'Se incluyen máscaras segmentadas de las siguientes escenas:\n';
+        options.multipleMasks.forEach((mask, index) => {
+          csv += `Escena ${index + 1},${mask.sceneId || 'Escena sin ID'},${mask.captureDate || 'Fecha no disponible'}\n`;
+        });
+        csv += '\n';
+      }
+      
       if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
         csv += 'Clase,Píxeles,Área (m²)\n';
         options.pixelCoverageData.forEach(item => {
@@ -468,11 +524,20 @@ export class ReportGeneratorService {
       csv += 'COBERTURA DE ÁREA (M²)\n';
       
       if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
-        csv += 'Clase,Píxeles,Área (m²),Porcentaje\n';
-        const totalPixels = options.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-        options.pixelCoverageData.forEach(item => {
-          const percentage = totalPixels > 0 ? ((item.pixel_count / totalPixels) * 100).toFixed(2) : '0.00';
-          csv += `"${item.class_name}",${item.pixel_count},${(item.area_m2 || 0).toFixed(2)},${percentage}%\n`;
+        // Usar datos filtrados (sin "Sin etiqueta")
+        const dataToDisplay = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 
+          ? options.filteredPixelCoverageData 
+          : options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
+        
+        const totalAreaFiltered = dataToDisplay.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+        
+        // Ordenar por área descendente
+        const sortedData = [...dataToDisplay].sort((a, b) => (b.area_m2 || 0) - (a.area_m2 || 0));
+        
+        csv += 'Clase,Área (m²),Porcentaje\n';
+        sortedData.forEach(item => {
+          const percentage = totalAreaFiltered > 0 ? ((item.area_m2 || 0) / totalAreaFiltered * 100).toFixed(2) : '0.00';
+          csv += `"${item.class_name}",${(item.area_m2 || 0).toFixed(2)},${percentage}%\n`;
         });
       } else {
         csv += 'Clase,Cantidad,Porcentaje\n';

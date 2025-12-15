@@ -29,6 +29,7 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   @Input() selectedClassesCount: number = 0; // Cantidad de clases seleccionadas
   @Input() pixelCoverageDataInput: PixelCoverageItem[] = []; // Datos de cobertura del componente padre
   @Input() totalPixelsInput: number = 0; // Total de píxeles del componente padre
+  @Input() totalAreaM2Input: number = 0; // Área total en m² del componente padre
   
   pixelCoverageData: PixelCoverageItem[] = [];
   filteredPixelCoverageData: PixelCoverageItem[] = [];
@@ -57,6 +58,7 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
       if (!this.sceneId) {
         this.pixelCoverageData = [...this.pixelCoverageDataInput];
         this.totalPixels = this.totalPixelsInput > 0 ? this.totalPixelsInput : 262144;
+        this.totalAreaM2 = this.totalAreaM2Input > 0 ? this.totalAreaM2Input : 262144.0;
         this.dataLoaded = true;
         this.filterPixelCoverageByClass();
       }
@@ -126,10 +128,46 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
       this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
     } else {
       // Filtrar por clases seleccionadas
+      // Si tenemos class_id válido (no 0), usar ese; si no, mapear por class_name
       this.filteredPixelCoverageData = this.pixelCoverageData
         .filter(item => {
-          const classIdStr = this.getClassIdStringByIndex(item.class_id);
-          return this.selectedClassIds.includes(classIdStr);
+          // Primero intentar por class_id si es diferente de 0
+          if (item.class_id && item.class_id !== 0) {
+            const classIdStr = this.getClassIdStringByIndex(item.class_id);
+            return this.selectedClassIds.includes(classIdStr);
+          }
+          
+          // Si class_id es 0, intentar mapear por class_name
+          // Mapear nombres de clases en español a IDs
+          const classNameToIdMap: { [key: string]: string } = {
+            'Sin etiqueta': 'unlabeled',
+            'Área pavimentada': 'paved-area',
+            'Tierra': 'dirt',
+            'Césped': 'grass',
+            'Grava': 'gravel',
+            'Agua': 'water',
+            'Rocas': 'rocks',
+            'Piscina': 'pool',
+            'Vegetación': 'vegetation',
+            'Techo': 'roof',
+            'Pared': 'wall',
+            'Ventana': 'window',
+            'Puerta': 'door',
+            'Cerca': 'fence',
+            'Poste de cerca': 'fence-pole',
+            'Persona': 'person',
+            'Perro': 'dog',
+            'Automóvil': 'car',
+            'Bicicleta': 'bicycle',
+            'Árbol': 'tree',
+            'Árbol sin hojas': 'bald-tree',
+            'Marcador AR': 'ar-marker',
+            'Obstáculo': 'obstacle',
+            'Conflicto': 'conflicting'
+          };
+          
+          const classId = classNameToIdMap[item.class_name];
+          return classId && this.selectedClassIds.includes(classId);
         })
         .sort((a, b) => 
           (b.coverage_percentage || 0) - (a.coverage_percentage || 0)

@@ -103,7 +103,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   @Input() regionId?: string; // Para cargar múltiples máscaras del período
   @Input() periodo?: string; // Período para cargar múltiples máscaras
   @Output() featureClick = new EventEmitter<SegmentFeature>();
-  @Output() multipeMasksLoaded = new EventEmitter<{ regionId: string; periodo: string }>();
+  @Output() multipeMasksLoaded = new EventEmitter<{ regionId: string; periodo: string; maskImages: string[] }>();
   @Output() maskLoaded = new EventEmitter<string>();  // Emite cuando se carga la máscara
 
   private map!: L.Map;
@@ -353,6 +353,8 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
 
           const allBounds: L.LatLngBoundsExpression[] = [];
 
+          const maskImages: string[] = [];
+
           masks.forEach((maskData: any, index: number) => {
             try {
               const bounds = this._convertBounds(maskData.bounds, maskData.crs);
@@ -363,6 +365,9 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
                   this.currentMaskImageUrl = maskData.image;
                   this.maskLoaded.emit(maskData.image);
                 }
+                
+                // Guardar todas las imágenes para reportes múltiples
+                maskImages.push(maskData.image);
                 
                 const layer = L.imageOverlay(maskData.image, bounds, {
                   opacity: this.maskOpacity,
@@ -389,7 +394,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
           
           // Emitir evento para que el componente padre cargue píxeles agregados
           if (this.regionId && this.periodo) {
-            this.multipeMasksLoaded.emit({ regionId: this.regionId, periodo: this.periodo });
+            this.multipeMasksLoaded.emit({ regionId: this.regionId, periodo: this.periodo, maskImages });
           }
         },
         error: (error: any) => {

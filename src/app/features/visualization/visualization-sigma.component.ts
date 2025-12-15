@@ -65,6 +65,9 @@ export class VisualizationSigmaComponent implements OnInit {
   filteredTotalAreaM2: number = 262144.0;  // Área filtrada en m²
   usePixelCoverage: boolean = false; // Cambiar a true cuando hay escena cargada
   isLoadingAggregatedCoverage: boolean = false;
+  
+  // ===== MÁSCARAS MÚLTIPLES =====
+  multipleMaskImages: string[] = [];  // URLs de máscaras múltiples para reportes
 
   months: MonthFilter[] = [
     { id: '2024-08', label: 'Agosto 2024', selected: false },
@@ -307,8 +310,8 @@ export class VisualizationSigmaComponent implements OnInit {
       // Si no hay clases seleccionadas, mostrar todas excepto "unlabeled"
       this.filteredPixelCoverageData = [...this.pixelCoverageData]
         .filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
-      this.filteredTotalPixels = this.totalPixels;
-      this.filteredTotalAreaM2 = this.totalAreaM2;
+      this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
     } else {
       // Filtrar por clases seleccionadas
       const selectedLabels = this.classTypes
@@ -389,24 +392,8 @@ export class VisualizationSigmaComponent implements OnInit {
           : 'todos los periodos';
         this.loadingMessage.set(`${response.features.length} segmentos cargados (${modeLabel})`);
         
-        // ===== EXTRAER sceneId Y CARGAR PÍXELES =====
-        if (response.features.length > 0) {
-          const sceneId = response.features[0].properties.sceneId;
-          if (sceneId) {
-            // Simular que se cargó una escena para que el currentScene tenga valor
-            // esto es necesario para que el binding en el template funcione
-            this.currentScene = { 
-              sceneId: sceneId,
-              regionId: this.selectedRegionId,
-              captureDate: params.periodo || '',
-              epsg: 4326,
-              sensor: '',
-              rasterPath: ''
-            };
-            this.loadPixelCoverage(sceneId);
-          }
-        }
-        // ============================================
+        // NO establecer currentScene aquí - solo se establece cuando el usuario carga una escena explícitamente
+        // Los datos agregados se cargan en loadAggregatedPixelCoverage() y NO deben ser sobrescritos
       },
       error: (err) => {
         console.error('Error cargando segmentos:', err);
@@ -419,8 +406,11 @@ export class VisualizationSigmaComponent implements OnInit {
   onFeatureClick(feature: SegmentFeature): void {
   }
 
-  onMultipleMasksLoaded(event: { regionId: string; periodo: string }): void {
+  onMultipleMasksLoaded(event: { regionId: string; periodo: string; maskImages: string[] }): void {
     // Se llamó cuando se cargan múltiples máscaras de un período
+    // Guardar las imágenes de máscaras para reportes
+    this.multipleMaskImages = event.maskImages || [];
+    
     // Solo cargar píxeles agregados si NO hay una escena individual seleccionada
     if (!this.currentScene?.sceneId) {
       this.loadAggregatedPixelCoverage(event.regionId, event.periodo);
@@ -481,7 +471,7 @@ export class VisualizationSigmaComponent implements OnInit {
       return this.loadingMessage();
     }
     
-    if (!this.currentScene) {
+    if (!this.currentScene && !this.usePixelCoverage) {
       if (this.availablePeriods.length === 0) {
         return 'No hay periodos disponibles. Sube una escena TIFF para comenzar.';
       }
@@ -539,13 +529,19 @@ export class VisualizationSigmaComponent implements OnInit {
     // Si hay cobertura por píxeles, usarla (FILTRADA por clases seleccionadas)
     if (this.usePixelCoverage && this.filteredPixelCoverageData.length > 0) {
       const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
-      const vegetationCoverage = this.filteredPixelCoverageData
+      const vegetationAreaM2 = this.filteredPixelCoverageData
         .filter(item => vegetationClasses.some(vc => 
           item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
         ))
-        .reduce((sum, item) => sum + (item.pixel_count / this.filteredTotalPixels * 100), 0);
+        .reduce((sum, item) => sum + (item.area_m2 || 0), 0);
       
-      return parseFloat(vegetationCoverage.toFixed(2));
+      // Calcular porcentaje basado en área: (área de vegetación / área total) * 100
+      const percentage = this.filteredTotalAreaM2 > 0 
+        ? (vegetationAreaM2 / this.filteredTotalAreaM2) * 100 
+        : 0;
+      
+      console.log('[getCoveragePercentage] Datos:', { vegetationAreaM2, filteredTotalAreaM2: this.filteredTotalAreaM2, percentage });
+      return parseFloat(percentage.toFixed(2));
     }
     
     // Fallback: usar segmentos
@@ -729,6 +725,16 @@ export class VisualizationSigmaComponent implements OnInit {
     const activeMonthLabel = this.getSelectedMonths()[0]?.label || 'Noviembre 2024';
     const maskImageUrl = this.getCurrentMaskImageUrl();
     
+    // Preparar datos de máscaras múltiples si existen
+    const multipleMasks = this.usePixelCoverage && this.multipleMaskImages.length > 0
+      ? this.multipleMaskImages.map((imageUrl, index) => ({
+          sceneId: `Escena ${index + 1}`,
+          captureDate: new Date().toISOString().split('T')[0],
+          imageUrl: imageUrl,
+          pixelCoverageData: this.pixelCoverageData
+        }))
+      : undefined;
+    
     this.reportGenerator.generateReport({
       format: data.format as 'pdf' | 'csv',
       content: data.content,
@@ -742,7 +748,10 @@ export class VisualizationSigmaComponent implements OnInit {
       vegetationAreaM2: this.getCoverageAreaM2(),
       totalAreaM2: this.filteredTotalAreaM2,
       // Pasar la URL de la máscara actual del Leaflet
-      maskImageUrl: maskImageUrl
+      maskImageUrl: maskImageUrl,
+      // Pasar máscaras múltiples si existen
+      multipleMasks: multipleMasks,
+      isMultipleMasks: this.usePixelCoverage && this.multipleMaskImages.length > 0
     });
   }
 }

@@ -5,7 +5,7 @@
     <!-- Mostrar área total cuando hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="usePixelCoverage">
       <span class="stat-label">Área total (m²):</span>
-      <span class="stat-value large">{{ (selectedClassIds.length > 0 ? filteredTotalAreaM2 : totalAreaM2) | number:'1.2-2' }}</span>
+      <span class="stat-value large">{{ filteredTotalAreaM2 | number:'1.2-2' }}</span>
     </div>
     
     <!-- Mostrar conteo de celdas cuando NO hay cobertura por píxeles -->
@@ -43,7 +43,7 @@
   </div>
 
   <!-- ===== NUEVA SECCIÓN: COBERTURA POR PÍXELES ===== -->
-  <div class="dashboard-card" *ngIf="sceneId">
+  <div class="dashboard-card" *ngIf="sceneId || (usePixelCoverage && filteredPixelCoverageData.length > 0)">
     <div class="dashboard-card-title">
       <i class="pi pi-objects-column"></i> Cobertura de Área (m²)
     </div>
