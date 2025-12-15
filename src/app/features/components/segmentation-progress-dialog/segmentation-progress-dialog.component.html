@@ -1,0 +1,86 @@
+<div class="progress-dialog-overlay" *ngIf="isVisible()" @fadeInOut>
+  <div class="progress-dialog-container">
+    <!-- Header -->
+    <div class="dialog-header">
+      <h2>Procesamiento de Imagen Aérea</h2>
+      <div class="timer">⏱️ {{ formatTime(elapsedSeconds()) }}</div>
+    </div>
+
+    <!-- Content -->
+    <div class="dialog-content">
+      <!-- Progress Bar -->
+      <div class="progress-section" *ngIf="!isError()">
+        <div class="progress-bar-container">
+          <div 
+            class="progress-bar-fill" 
+            [style.width.%]="progressPercentage()"
+            [class.completed]="isSuccess()"
+          ></div>
+        </div>
+        <div class="progress-text">
+          {{ progressPercentage() | number: '1.0-0' }}%
+        </div>
+      </div>
+
+      <!-- Steps List -->
+      <div class="steps-container">
+        <div 
+          *ngFor="let step of progress()?.steps; let i = index" 
+          class="step-item"
+          [ngClass]="getStepClass(step)"
+        >
+          <div class="step-header">
+            <div class="step-icon" [ngClass]="step.status">
+              {{ getStepIcon(step) }}
+            </div>
+            <div class="step-info">
+              <h3 class="step-name">{{ step.name }}</h3>
+              <p class="step-message" *ngIf="step.message">{{ step.message }}</p>
+              <p class="step-error" *ngIf="step.error">{{ step.error }}</p>
+            </div>
+            <div class="step-number">{{ i + 1 }}/{{ progress()?.totalSteps }}</div>
+          </div>
+          <div class="step-loader" *ngIf="step.status === 'in-progress'">
+            <div class="spinner"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div class="error-section" *ngIf="isError()">
+        <div class="error-box">
+          <h3>Error en el Procesamiento</h3>
+          <p>{{ progress()?.errorMessage }}</p>
+        </div>
+      </div>
+
+      <!-- Success Message -->
+      <div class="success-section" *ngIf="isSuccess()">
+        <div class="success-box">
+          <h3>✓ Procesamiento Completado</h3>
+          <p *ngIf="progress()?.result">
+            Se han generado <strong>{{ progress()?.result?.segmentCount }}</strong> segmentos
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Actions -->
+    <div class="dialog-footer">
+      <button 
+        class="btn btn-secondary" 
+        (click)="close()"
+        *ngIf="isError()"
+      >
+        Cerrar
+      </button>
+      <button 
+        class="btn btn-primary" 
+        (click)="visualizeMap()"
+        *ngIf="isSuccess()"
+      >
+        Visualizar el Mapa
+      </button>
+    </div>
+  </div>
+</div>

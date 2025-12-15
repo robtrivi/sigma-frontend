@@ -79,4 +79,11 @@
     (close)="onDownloadModalClose()"
     (download)="onDownloadModalSubmit($event)"
   ></app-download-modal>
+
+  <app-segmentation-progress-dialog
+    [isVisible]="showProgressDialog"
+    [sceneId]="progressSceneId"
+    (onClose)="onProgressDialogClose()"
+    (onVisualize)="onVisualizeMapa($event)"
+  ></app-segmentation-progress-dialog>
 </div>

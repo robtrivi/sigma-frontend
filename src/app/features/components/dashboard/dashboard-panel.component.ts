@@ -87,7 +87,9 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   private filterPixelCoverageByClass(): void {
     if (this.selectedClassIds.length === 0) {
       // Si no hay clases seleccionadas, mostrar todas
-      this.filteredPixelCoverageData = [...this.pixelCoverageData];
+      this.filteredPixelCoverageData = [...this.pixelCoverageData].sort((a, b) => 
+        (b.coverage_percentage || 0) - (a.coverage_percentage || 0)
+      );
       this.filteredTotalPixels = this.totalPixels;
     } else {
       // Filtrar por clases seleccionadas
@@ -97,7 +99,9 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
         // Usamos la posición en CLASS_CATALOG para mapear class_id
         const classIdStr = this.getClassIdStringByIndex(item.class_id);
         return this.selectedClassIds.includes(classIdStr);
-      });
+      }).sort((a, b) => 
+        (b.coverage_percentage || 0) - (a.coverage_percentage || 0)
+      );
       
       // Calcular total de píxeles filtrados
       this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);

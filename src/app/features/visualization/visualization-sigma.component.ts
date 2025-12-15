@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { LeafletMapComponent } from '../components/leaflet-map/leaflet-map.component';
@@ -6,6 +6,7 @@ import { ControlPanelComponent, SceneUploadData } from '../components/control-pa
 import { DashboardPanelComponent } from '../components/dashboard/dashboard-panel.component';
 import { VisualizationHeaderComponent } from '../components/header/visualization-header.component';
 import { DownloadModalComponent } from '../components/download-modal/download-modal.component';
+import { SegmentationProgressDialogComponent } from '../components/segmentation-progress-dialog/segmentation-progress-dialog.component';
 import { ChartBar, ClassDistributionStat, ClassType, MonthFilter } from '../models/visualization.models';
 import { ReportGeneratorService } from '../services/report-generator.service';
 import { ScenesService } from '../services/scenes.service';
@@ -25,18 +26,25 @@ import { finalize } from 'rxjs';
     ControlPanelComponent,
     DashboardPanelComponent,
     VisualizationHeaderComponent,
-    DownloadModalComponent
+    DownloadModalComponent,
+    SegmentationProgressDialogComponent
   ],
   templateUrl: './visualization-sigma.component.html',
   styleUrls: ['./visualization-sigma.component.scss']
 })
 export class VisualizationSigmaComponent implements OnInit {
+  @ViewChild(SegmentationProgressDialogComponent) progressDialog?: SegmentationProgressDialogComponent;
+  
   uploadedFile: string = '';
   hoveredFeature: SegmentFeature | null = null;
   showDownloadModal: boolean = false;
   isLoading = signal(false);
   loadingMessage = signal('');
   errorMessage = signal('');
+  
+  // Progress dialog
+  showProgressDialog = signal(false);
+  progressSceneId = signal<string | null>(null);
   
   currentScene: SceneResponse | null = null;
   segmentFeatures = signal<SegmentFeature[]>([]);
@@ -194,11 +202,14 @@ export class VisualizationSigmaComponent implements OnInit {
         
         const periodo = scene.captureDate.substring(0, 7);
         this.selectedPeriodo = periodo;
-        this.loadingMessage.set('Escena cargada exitosamente. Segmentación ejecutada automáticamente.');
         
-        // ===== CARGAR COBERTURA POR PÍXELES =====
-        this.loadPixelCoverage(scene.sceneId);
-        // =========================================
+        // Mostrar diálogo de progreso
+        this.showProgressDialog.set(true);
+        this.progressSceneId.set(scene.sceneId);
+        
+        if (this.progressDialog) {
+          this.progressDialog.startStreaming(scene.sceneId);
+        }
         
         this.loadAvailablePeriods();
       },
@@ -207,6 +218,23 @@ export class VisualizationSigmaComponent implements OnInit {
         this.errorMessage.set(err.error?.message || 'Error al cargar la escena');
       }
     });
+  }
+
+  onProgressDialogClose(): void {
+    this.showProgressDialog.set(false);
+    this.progressSceneId.set(null);
+  }
+
+  onVisualizeMapa(sceneId: string): void {
+    // Cargar cobertura por píxeles
+    this.loadPixelCoverage(sceneId);
+    // Cerrar diálogo
+    this.showProgressDialog.set(false);
+    this.progressSceneId.set(null);
+    // Recargar navegador
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
   }
 
   private loadPixelCoverage(sceneId: string): void {
