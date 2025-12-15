@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -9,6 +9,7 @@ import { CommonModule } from '@angular/common';
   styleUrl: './download-modal.component.scss'
 })
 export class DownloadModalComponent {
+  @Input() selectedPeriodsCount: number = 1;
   @Output() close = new EventEmitter<void>();
   @Output() download = new EventEmitter<{ format: string; content: string[]; region: string }>();
 
@@ -26,9 +27,26 @@ export class DownloadModalComponent {
 
   onFormatChange(format: 'pdf' | 'csv'): void {
     this.selectedFormat = format;
+    
+    // Si se selecciona CSV, deseleccionar opciones no compatibles
+    if (format === 'csv') {
+      this.selectedContent['map'] = false;
+      this.selectedContent['recommendations'] = false;
+    }
+    
+    // Si hay solo 1 período seleccionado, deseleccionar "Análisis Comparativo"
+    if (this.selectedPeriodsCount <= 1) {
+      this.selectedContent['comparison'] = false;
+    }
   }
 
   onContentToggle(key: string): void {
+    // No permitir seleccionar "Análisis Comparativo" si hay solo 1 período
+    if (key === 'comparison' && this.selectedPeriodsCount <= 1) {
+      this.selectedContent[key] = false;
+      return;
+    }
+    
     this.selectedContent[key] = !this.selectedContent[key];
   }
 

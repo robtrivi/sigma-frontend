@@ -34,6 +34,7 @@ import { finalize } from 'rxjs';
 })
 export class VisualizationSigmaComponent implements OnInit {
   @ViewChild(SegmentationProgressDialogComponent) progressDialog?: SegmentationProgressDialogComponent;
+  @ViewChild(LeafletMapComponent) leafletMap?: LeafletMapComponent;
   
   uploadedFile: string = '';
   hoveredFeature: SegmentFeature | null = null;
@@ -52,6 +53,7 @@ export class VisualizationSigmaComponent implements OnInit {
   selectedPeriodo: string = '';
   regions: Region[] = [];
   availablePeriods: PeriodInfo[] = [];
+  currentMaskImageUrl: string = '';  // Máscara actual guardada desde Leaflet
 
   // ===== COBERTURA POR PÍXELES =====
   pixelCoverageData: PixelCoverageItem[] = [];
@@ -713,15 +715,34 @@ export class VisualizationSigmaComponent implements OnInit {
     this.showDownloadModal = false;
   }
 
+  onMaskLoaded(maskImageUrl: string): void {
+    // Capturar la máscara cuando se carga en Leaflet
+    this.currentMaskImageUrl = maskImageUrl;
+  }
+
+  private getCurrentMaskImageUrl(): string {
+    // Obtener la URL de la máscara guardada
+    return this.currentMaskImageUrl;
+  }
+
   onDownloadModalSubmit(data: { format: string; content: string[]; region: string }): void {
     const activeMonthLabel = this.getSelectedMonths()[0]?.label || 'Noviembre 2024';
+    const maskImageUrl = this.getCurrentMaskImageUrl();
     
     this.reportGenerator.generateReport({
       format: data.format as 'pdf' | 'csv',
       content: data.content,
       region: data.region as 'full' | 'subregion' | 'green-only',
       cells: [],
-      monthLabel: activeMonthLabel
+      monthLabel: activeMonthLabel,
+      // Pasar los datos filtrados según los filtros aplicados
+      pixelCoverageData: this.pixelCoverageData,
+      filteredPixelCoverageData: this.filteredPixelCoverageData,
+      vegetationCoveragePercentage: this.getCoveragePercentage(),
+      vegetationAreaM2: this.getCoverageAreaM2(),
+      totalAreaM2: this.filteredTotalAreaM2,
+      // Pasar la URL de la máscara actual del Leaflet
+      maskImageUrl: maskImageUrl
     });
   }
 }

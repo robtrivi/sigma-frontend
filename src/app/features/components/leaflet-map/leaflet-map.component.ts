@@ -104,10 +104,12 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   @Input() periodo?: string; // Período para cargar múltiples máscaras
   @Output() featureClick = new EventEmitter<SegmentFeature>();
   @Output() multipeMasksLoaded = new EventEmitter<{ regionId: string; periodo: string }>();
+  @Output() maskLoaded = new EventEmitter<string>();  // Emite cuando se carga la máscara
 
   private map!: L.Map;
   maskLayer?: L.Layer;  // Capa única para escena individual
   maskLayers: L.Layer[] = [];  // Capas múltiples para período
+  currentMaskImageUrl: string = '';  // URL de la máscara actual (para reportes)
   classTypes = CLASS_CATALOG.filter(c => c.id !== 'unlabeled');  // Excluir "Sin etiqueta"
   
   // Control de máscara
@@ -129,6 +131,13 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   ngAfterViewInit(): void {
     setTimeout(() => {
       this.initMap();
+      
+      // Cargar máscara si ya hay inputs iniciales
+      if (this.sceneId && !this.periodo) {
+        this.loadMaskLayer();
+      } else if (this.periodo && this.regionId) {
+        this.loadMasksForPeriod();
+      }
     }, 0);
   }
 
@@ -136,6 +145,13 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     if (this.map) {
       this.map.remove();
     }
+  }
+
+  /**
+   * Obtiene la URL de la máscara actual para usar en reportes
+   */
+  getMaskImageUrl(): string {
+    return this.currentMaskImageUrl;
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -266,6 +282,8 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
 
       // Crear ImageOverlay con la imagen base64
       if (maskInfo.image) {
+        this.currentMaskImageUrl = maskInfo.image;  // Guardar URL de la máscara para reportes
+        this.maskLoaded.emit(maskInfo.image);  // Emitir evento con la máscara cargada
         this.maskLayer = L.imageOverlay(maskInfo.image, bounds, {
           opacity: this.maskOpacity,
           interactive: false
@@ -340,6 +358,12 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
               const bounds = this._convertBounds(maskData.bounds, maskData.crs);
               
               if (maskData.image) {
+                // Guardar la primera máscara para reportes
+                if (index === 0) {
+                  this.currentMaskImageUrl = maskData.image;
+                  this.maskLoaded.emit(maskData.image);
+                }
+                
                 const layer = L.imageOverlay(maskData.image, bounds, {
                   opacity: this.maskOpacity,
                   interactive: false

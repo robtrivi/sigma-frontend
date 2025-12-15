@@ -98,7 +98,7 @@
         
         <div class="content-selection">
           <!-- Mapa Segmentado -->
-          <div class="content-option">
+          <div class="content-option" *ngIf="selectedFormat !== 'csv'">
             <input 
               type="checkbox" 
               id="contentMap"
@@ -134,8 +134,8 @@
               (change)="onContentToggle('classes')"
             >
             <label for="contentClasses" class="content-label">
-              <span class="content-label-title"><i class="pi pi-tags"></i> Leyenda de Clases</span>
-              <span class="content-label-desc">Descripción de cada tipo de clase segmentada</span>
+              <span class="content-label-title"><i class="pi pi-table"></i> Cobertura de Área (m²)</span>
+              <span class="content-label-desc">Tabla con distribución de clases, áreas y porcentajes de cobertura</span>
             </label>
           </div>
 
@@ -154,7 +154,7 @@
           </div>
 
           <!-- Análisis Comparativo -->
-          <div class="content-option">
+          <div class="content-option" *ngIf="selectedPeriodsCount > 1">
             <input 
               type="checkbox" 
               id="contentComparison"
@@ -168,7 +168,7 @@
           </div>
 
           <!-- Recomendaciones -->
-          <div class="content-option">
+          <div class="content-option" *ngIf="selectedFormat !== 'csv'">
             <input 
               type="checkbox" 
               id="contentRecommendations"

@@ -41,6 +41,7 @@
           [selectedClassIds]="getSelectedClassIds()"
           (featureClick)="onFeatureClick($event)"
           (multipeMasksLoaded)="onMultipleMasksLoaded($event)"
+          (maskLoaded)="onMaskLoaded($event)"
         ></app-leaflet-map>
 
         <app-dashboard-panel
@@ -78,6 +79,7 @@
 
   <app-download-modal 
     *ngIf="showDownloadModal"
+    [selectedPeriodsCount]="getSelectedMonths().length"
     (close)="onDownloadModalClose()"
     (download)="onDownloadModalSubmit($event)"
   ></app-download-modal>
