@@ -85,10 +85,15 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
 
     this.segmentsService.getCoverage(this.sceneId).subscribe({
       next: (coverage) => {
-        // Asignar directamente sin transformación compleja
-        this.pixelCoverageData = coverage.coverage_by_class || [];
-        this.totalPixels = coverage.total_pixels ?? 262144;
-        this.totalAreaM2 = coverage.total_area_m2 ?? 262144.0;
+        // Filtrar para excluir "unlabeled"
+        const allData = coverage.coverage_by_class || [];
+        this.pixelCoverageData = allData.filter(item => 
+          item.class_name?.toLowerCase() !== 'unlabeled'
+        );
+        
+        // Recalcular totales sin la clase "unlabeled"
+        this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+        this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
         this.pixelAreaM2 = coverage.pixel_area_m2 ?? 1.0;
         
         // Marcar como cargado ANTES de filtrar
@@ -111,12 +116,14 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     }
 
     if (this.selectedClassIds.length === 0) {
-      // Si no hay clases seleccionadas, mostrar todas
-      this.filteredPixelCoverageData = [...this.pixelCoverageData].sort((a, b) => 
-        (b.coverage_percentage || 0) - (a.coverage_percentage || 0)
-      );
-      this.filteredTotalPixels = this.totalPixels;
-      this.filteredTotalAreaM2 = this.totalAreaM2;
+      // Si no hay clases seleccionadas, mostrar todas excepto "unlabeled"
+      this.filteredPixelCoverageData = [...this.pixelCoverageData]
+        .filter(item => item.class_name !== 'unlabeled')  // Excluir "Sin etiqueta"
+        .sort((a, b) => 
+          (b.coverage_percentage || 0) - (a.coverage_percentage || 0)
+        );
+      this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
     } else {
       // Filtrar por clases seleccionadas
       this.filteredPixelCoverageData = this.pixelCoverageData

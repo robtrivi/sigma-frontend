@@ -108,7 +108,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   private map!: L.Map;
   maskLayer?: L.Layer;  // Capa única para escena individual
   maskLayers: L.Layer[] = [];  // Capas múltiples para período
-  classTypes = CLASS_CATALOG;
+  classTypes = CLASS_CATALOG.filter(c => c.id !== 'unlabeled');  // Excluir "Sin etiqueta"
   
   // Control de máscara
   showMask: boolean = true;  
@@ -228,9 +228,14 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       // Construir URL según si hay clases seleccionadas
       let maskInfoUrl = `${environment.apiBaseUrl}/api/v1/segments/mask-info/${this.sceneId}`;
       
-      // Si hay clases seleccionadas, usar endpoint filtrado
-      if (this.selectedClassIds && this.selectedClassIds.length > 0) {
-        const classNumbers = this.selectedClassIds
+      // Determinar clases a mostrar: seleccionadas O todas excepto unlabeled
+      let classesToShow = this.selectedClassIds && this.selectedClassIds.length > 0 
+        ? this.selectedClassIds 
+        : Object.keys(CLASS_NAME_TO_ID).filter(name => name !== 'unlabeled');  // Todas excepto unlabeled
+      
+      // Si hay clases a mostrar (distintas de todas), usar endpoint filtrado
+      if (classesToShow && classesToShow.length > 0 && classesToShow.length < Object.keys(CLASS_NAME_TO_ID).length) {
+        const classNumbers = classesToShow
           .filter(name => name in CLASS_NAME_TO_ID)
           .map(name => CLASS_NAME_TO_ID[name])
           .join(',');
@@ -241,7 +246,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       }
       
       // Guardar las clases para evitar recargas innecesarias
-      this.lastLoadedClasses = (this.selectedClassIds || []).join(',');
+      this.lastLoadedClasses = (classesToShow || []).join(',');
 
       // Obtener información de proyección e imagen en base64
       const infoResponse = await fetch(maskInfoUrl);
@@ -309,8 +314,13 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     this.isLoadingMask = true;
 
     try {
-      // Pasar selectedClassIds al servicio
-      this.segmentsService.getMasksForPeriod(this.regionId, this.periodo, this.selectedClassIds).subscribe({
+      // Determinar clases a mostrar: seleccionadas O todas excepto unlabeled
+      const classesToShow = this.selectedClassIds && this.selectedClassIds.length > 0 
+        ? this.selectedClassIds 
+        : this.classTypes.map(c => c.id);  // Todas las clases del UI (ya sin unlabeled)
+      
+      // Pasar clases al servicio
+      this.segmentsService.getMasksForPeriod(this.regionId, this.periodo, classesToShow).subscribe({
         next: (response: any) => {
           const masks = response.masks || [];
           

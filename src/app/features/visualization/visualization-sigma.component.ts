@@ -60,6 +60,7 @@ export class VisualizationSigmaComponent implements OnInit {
   totalAreaM2: number = 262144.0;  // Área total en m²
   pixelAreaM2: number = 1.0;  // Área por píxel en m²
   filteredTotalPixels: number = 262144;
+  filteredTotalAreaM2: number = 262144.0;  // Área filtrada en m²
   usePixelCoverage: boolean = false; // Cambiar a true cuando hay escena cargada
   isLoadingAggregatedCoverage: boolean = false;
 
@@ -73,13 +74,15 @@ export class VisualizationSigmaComponent implements OnInit {
   // Período activo actual (usado cuando hay múltiples períodos seleccionados)
   activeMonth: string = '2024-11'; // Inicializar con el período más reciente
 
-  classTypes: ClassType[] = CLASS_CATALOG.map(c => ({
-    id: c.id,
-    label: c.name,
-    color: c.color,
-    icon: c.icon,
-    selected: false
-  }));
+  classTypes: ClassType[] = CLASS_CATALOG
+    .filter(c => c.id !== 'unlabeled')  // Excluir "Sin etiqueta"
+    .map(c => ({
+      id: c.id,
+      label: c.name,
+      color: c.color,
+      icon: c.icon,
+      selected: false
+    }));
 
   constructor(
     private reportGenerator: ReportGeneratorService,
@@ -242,9 +245,14 @@ export class VisualizationSigmaComponent implements OnInit {
   private loadPixelCoverage(sceneId: string): void {
     this.segmentsService.getCoverage(sceneId).subscribe({
       next: (coverage: SegmentationCoverageResponse) => {
-        this.pixelCoverageData = coverage.coverage_by_class;
-        this.totalPixels = coverage.total_pixels;
-        this.totalAreaM2 = coverage.total_area_m2 ?? 262144.0;
+        // Filtrar para excluir "unlabeled"
+        this.pixelCoverageData = coverage.coverage_by_class.filter(item =>
+          item.class_name?.toLowerCase() !== 'unlabeled'
+        );
+        
+        // Recalcular totales sin "unlabeled"
+        this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+        this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
         this.pixelAreaM2 = coverage.pixel_area_m2 ?? 1.0;
         this.filterPixelCoverageByClass();
         this.usePixelCoverage = true;
@@ -264,17 +272,20 @@ export class VisualizationSigmaComponent implements OnInit {
 
     this.segmentsService.getAggregatedPixelCoverage(regionId, periodo).subscribe({
       next: (response: any) => {
-        // Convertir respuesta a formato PixelCoverageItem[]
-        this.pixelCoverageData = response.coverageByClass.map((item: any) => ({
-          class_id: 0, // No usamos class_id en este contexto
-          class_name: item.class_name,
-          pixel_count: item.pixel_count,
-          coverage_percentage: item.coverage_percentage,
-          area_m2: item.area_m2 || 0
-        }));
+        // Convertir respuesta a formato PixelCoverageItem[] y filtrar "unlabeled"
+        this.pixelCoverageData = response.coverageByClass
+          .filter((item: any) => item.class_name?.toLowerCase() !== 'unlabeled')
+          .map((item: any) => ({
+            class_id: 0, // No usamos class_id en este contexto
+            class_name: item.class_name,
+            pixel_count: item.pixel_count,
+            coverage_percentage: item.coverage_percentage,
+            area_m2: item.area_m2 || 0
+          }));
 
-        this.totalPixels = response.totalPixels;
-        this.totalAreaM2 = response.totalAreaM2 ?? 262144.0;
+        // Recalcular totales sin "unlabeled"
+        this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+        this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
         this.pixelAreaM2 = response.pixelAreaM2 ?? 1.0;
         this.filterPixelCoverageByClass();
         this.usePixelCoverage = true;
@@ -291,9 +302,11 @@ export class VisualizationSigmaComponent implements OnInit {
 
   private filterPixelCoverageByClass(): void {
     if (this.classTypes.filter(c => c.selected).length === 0) {
-      // Si no hay clases seleccionadas, mostrar todas
-      this.filteredPixelCoverageData = [...this.pixelCoverageData];
+      // Si no hay clases seleccionadas, mostrar todas excepto "unlabeled"
+      this.filteredPixelCoverageData = [...this.pixelCoverageData]
+        .filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
       this.filteredTotalPixels = this.totalPixels;
+      this.filteredTotalAreaM2 = this.totalAreaM2;
     } else {
       // Filtrar por clases seleccionadas
       const selectedLabels = this.classTypes
@@ -305,8 +318,9 @@ export class VisualizationSigmaComponent implements OnInit {
         return selectedLabels.some(label => itemClassName.includes(label));
       });
       
-      // Calcular total de píxeles filtrados
+      // Calcular total de píxeles filtrados y área filtrada
       this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
     }
   }
 
@@ -341,8 +355,8 @@ export class VisualizationSigmaComponent implements OnInit {
       this.months.forEach(m => m.selected = m.id === this.selectedPeriodo);
     }
 
-    // Cargar cobertura agregada automáticamente cuando hay período
-    if (this.selectedPeriodo && this.selectedRegionId) {
+    // Cargar cobertura agregada automáticamente cuando hay período Y no hay escena individual
+    if (this.selectedPeriodo && this.selectedRegionId && !this.currentScene?.sceneId) {
       this.loadAggregatedPixelCoverage(this.selectedRegionId, this.selectedPeriodo);
     }
 
@@ -405,8 +419,10 @@ export class VisualizationSigmaComponent implements OnInit {
 
   onMultipleMasksLoaded(event: { regionId: string; periodo: string }): void {
     // Se llamó cuando se cargan múltiples máscaras de un período
-    // Cargar píxeles agregados del backend
-    this.loadAggregatedPixelCoverage(event.regionId, event.periodo);
+    // Solo cargar píxeles agregados si NO hay una escena individual seleccionada
+    if (!this.currentScene?.sceneId) {
+      this.loadAggregatedPixelCoverage(event.regionId, event.periodo);
+    }
   }
 
   onMonthFilterChange(): void {
@@ -518,7 +534,7 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   getCoveragePercentage(): number {
-    // Si hay cobertura por píxeles, usarla (FILTRADA)
+    // Si hay cobertura por píxeles, usarla (FILTRADA por clases seleccionadas)
     if (this.usePixelCoverage && this.filteredPixelCoverageData.length > 0) {
       const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
       const vegetationCoverage = this.filteredPixelCoverageData
@@ -630,14 +646,11 @@ export class VisualizationSigmaComponent implements OnInit {
         ? this.formatPeriodoLabel(this.selectedPeriodo)
         : 'Sin periodo';
       
-      const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped'];
-      const vegetationCoverage = this.pixelCoverageData
-        .filter(item => vegetationClasses.some(vc => 
-          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
-        ))
-        .reduce((sum, item) => sum + item.coverage_percentage, 0);
+      // Usar la misma lógica que getCoveragePercentage()
+      const vegetationCoverage = this.getCoveragePercentage();
       
-      const info = `Período: ${periodoLabel} | Área total (m²): ${this.totalAreaM2.toFixed(2)} | Áreas Verdes: ${vegetationCoverage.toFixed(2)}%`;
+      // Usar filteredTotalAreaM2 para que cambie según las clases seleccionadas
+      const info = `Período: ${periodoLabel} | Área total (m²): ${this.filteredTotalAreaM2.toFixed(2)} | Áreas Verdes: ${vegetationCoverage.toFixed(2)}%`;
       return info;
     }
     
