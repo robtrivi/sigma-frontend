@@ -11,7 +11,7 @@
     <!-- Mostrar conteo de celdas cuando NO hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="!usePixelCoverage">
       <span class="stat-label">{{ statLabel }}:</span>
-      <span class="stat-value large">{{ visibleCellsCount | number }}</span>
+      <span class="stat-value large">{{ visibleSegmentsCount | number }}</span>
     </div>
     
     <!-- Mostrar información de clases cuando hay cobertura por píxeles -->
@@ -33,7 +33,7 @@
     <!-- Mostrar información de celdas cuando NO hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="!usePixelCoverage">
       <span class="stat-label">Total de celdas:</span>
-      <span class="stat-value">{{ totalCells | number }}</span>
+      <span class="stat-value">{{ totalSegmentsCount | number }}</span>
     </div>
 
     <div class="card-stat" *ngIf="!usePixelCoverage">

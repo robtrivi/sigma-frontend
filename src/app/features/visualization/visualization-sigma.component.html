@@ -47,8 +47,8 @@
         <app-dashboard-panel
           [dashboardTitle]="getDashboardTitle()"
           [statLabel]="getStatLabel()"
-          [visibleCellsCount]="getVisibleSegmentsCount()"
-          [totalCells]="usePixelCoverage ? filteredTotalPixels : segmentFeatures().length"
+          [visibleSegmentsCount]="getVisibleSegmentsCount()"
+          [totalSegmentsCount]="usePixelCoverage ? filteredTotalPixels : segmentFeatures().length"
           [coverageLabel]="getCoverageLabel()"
           [coveragePercentage]="getCoveragePercentage()"
           [coverageAreaM2]="getCoverageAreaM2()"

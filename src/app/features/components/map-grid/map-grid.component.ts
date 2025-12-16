@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ClassType, MapCell } from '../../models/visualization.models';
+import { ClassType } from '../../models/visualization.models';
 
 @Component({
   selector: 'app-map-grid',
@@ -10,21 +10,21 @@ import { ClassType, MapCell } from '../../models/visualization.models';
   styleUrls: ['./map-grid.component.scss']
 })
 export class MapGridComponent {
-  @Input({ required: true }) cells: MapCell[] = [];
+  @Input({ required: true }) cells: any[] = [];
   @Input({ required: true }) classTypes: ClassType[] = [];
-  @Input() hoveredCell: MapCell | null = null;
+  @Input() hoveredCell: any | null = null;
 
-  @Output() cellHover = new EventEmitter<MapCell>();
+  @Output() cellHover = new EventEmitter<any>();
   @Output() cellLeave = new EventEmitter<void>();
-  @Output() cellSelect = new EventEmitter<MapCell>();
+  @Output() cellSelect = new EventEmitter<any>();
 
   infoBoxStyle: { [key: string]: string } = {};
 
-  trackByCellId(_: number, cell: MapCell): number {
+  trackByCellId(_: number, cell: any): number {
     return cell.id;
   }
 
-  getCellClasses(cell: MapCell): Record<string, boolean> {
+  getCellClasses(cell: any): Record<string, boolean> {
     return {
       [cell.classId]: true,
       selected: cell.selected

@@ -681,13 +681,11 @@ export class VisualizationSigmaComponent implements OnInit {
     this.filterPixelCoverageByClass();
     
     if (this.availablePeriods.length > 0) {
-      this.selectedPeriodo = this.availablePeriods[0].periodo;
-      this.activeMonth = this.selectedPeriodo;
-      this.months.forEach(m => m.selected = m.id === this.selectedPeriodo);
-    }
-    
-    // Solo recargar segmentos tiles si no estamos en modo múltiples máscaras
-    if (this.selectedRegionId && !this.selectedPeriodo) {
+      // Seleccionar el período más reciente, como cuando se recarga el navegador
+      const mostRecentPeriod = this.findMostRecentPeriod(this.availablePeriods.map(p => p.periodo));
+      this.selectedPeriodo = mostRecentPeriod;
+      this.activeMonth = mostRecentPeriod;
+      this.months.forEach(m => m.selected = m.id === mostRecentPeriod);
       this.loadSegmentsTiles();
     }
   }

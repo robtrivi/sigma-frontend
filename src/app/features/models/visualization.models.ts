@@ -1,13 +1,3 @@
-export interface MapCell {
-  id: number;
-  name: string;
-  type: string;
-  classId: string;
-  area: string;
-  color: string;
-  selected: boolean;
-}
-
 export interface MonthFilter {
   id: string;
   label: string;

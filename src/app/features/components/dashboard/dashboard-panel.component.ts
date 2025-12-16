@@ -14,8 +14,8 @@ import { getClassColor } from '../../models/class-catalog';
 export class DashboardPanelComponent implements OnInit, OnChanges {
   @Input({ required: true }) dashboardTitle: string = '';
   @Input({ required: true }) statLabel: string = '';
-  @Input({ required: true }) visibleCellsCount: number = 0;
-  @Input({ required: true }) totalCells: number = 0;
+  @Input({ required: true }) visibleSegmentsCount: number = 0;
+  @Input({ required: true }) totalSegmentsCount: number = 0;
   @Input({ required: true }) coverageLabel: string = '';
   @Input({ required: true }) coveragePercentage: number = 0;
   @Input() coverageAreaM2: number = 0;  // Área en metros cuadrados del elemento de cobertura
