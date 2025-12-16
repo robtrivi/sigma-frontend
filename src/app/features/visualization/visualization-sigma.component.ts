@@ -295,6 +295,7 @@ export class VisualizationSigmaComponent implements OnInit {
         this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
         this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
         this.pixelAreaM2 = response.pixelAreaM2 ?? 1.0;
+        
         this.filterPixelCoverageByClass();
         this.usePixelCoverage = true;
       },

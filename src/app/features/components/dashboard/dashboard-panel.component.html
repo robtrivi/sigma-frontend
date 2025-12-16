@@ -79,12 +79,12 @@
             </td>
             <td>{{ item.class_name }}</td>
             <td class="area-m2">{{ (item.area_m2 || 0) | number:'1.2-2' }}</td>
-            <td class="coverage-percentage">{{ (item.pixel_count / filteredTotalPixels * 100).toFixed(2) }}%</td>
+            <td class="coverage-percentage">{{ ((item.area_m2 || 0) / (filteredTotalAreaM2 || 1) * 100).toFixed(2) }}%</td>
             <td class="coverage-bar">
               <div class="progress-bar-pixel">
                 <div
                   class="progress-fill-pixel"
-                  [style.width.%]="item.pixel_count / filteredTotalPixels * 100"
+                  [style.width.%]="(item.area_m2 || 0) / (filteredTotalAreaM2 || 1) * 100"
                   [style.background-color]="getColorForClass(item.class_name)"
                 ></div>
               </div>
