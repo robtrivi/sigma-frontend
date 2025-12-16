@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core';
-import { MapCell } from '../models/visualization.models';
 import { PixelCoverageItem } from '../models/api.models';
 
 export interface MaskData {
@@ -9,12 +8,22 @@ export interface MaskData {
   pixelCoverageData: PixelCoverageItem[];
 }
 
+export interface PeriodReportData {
+  monthLabel: string;
+  pixelCoverageData: PixelCoverageItem[];
+  filteredPixelCoverageData: PixelCoverageItem[];
+  vegetationCoveragePercentage: number;
+  vegetationAreaM2: number;
+  totalAreaM2: number;
+  multipleMasks?: MaskData[];
+  isMultipleMasks: boolean;
+}
+
 export interface ReportOptions {
   format: 'pdf' | 'csv';
   content: string[];
   region: 'full' | 'subregion' | 'green-only';
-  cells?: MapCell[];
-  monthLabel?: string;
+  monthLabel?: string;  // Para reporte de un período (modo legado)
   pixelCoverageData?: PixelCoverageItem[];
   filteredPixelCoverageData?: PixelCoverageItem[];
   vegetationCoveragePercentage?: number;
@@ -23,6 +32,7 @@ export interface ReportOptions {
   maskImageUrl?: string;  // URL de la máscara actual de Leaflet (para modo individual)
   multipleMasks?: MaskData[];  // Array de máscaras para modo múltiple
   isMultipleMasks?: boolean;  // Flag indicando si es modo múltiples máscaras
+  multiPeriodData?: PeriodReportData[];  // Array de datos por período para reportes multi-período
 }
 
 @Injectable({
@@ -84,7 +94,6 @@ export class ReportGeneratorService {
   }
 
   private buildHTMLContent(options: ReportOptions): string {
-    const cells = options.cells || [];
     const monthLabel = options.monthLabel || 'Octubre 2025';
     
     let content = `
@@ -100,6 +109,8 @@ export class ReportGeneratorService {
           header { background: linear-gradient(135deg, #2d5016 0%, #4a7c2c 100%); color: white; padding: 30px; text-align: center; margin-bottom: 30px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
           h1 { font-size: 28px; margin-bottom: 10px; }
           .subtitle { font-size: 12px; opacity: 0.9; }
+          .period-header { background-color: #e8f5e9; border-left: 4px solid #4a7c2c; padding: 15px; margin: 30px 0 20px 0; page-break-after: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          .period-title { font-size: 16px; font-weight: 600; color: #2d5016; }
           .section { margin-bottom: 30px; page-break-inside: avoid; }
           .section-title { font-size: 18px; font-weight: 600; color: #2d5016; border-bottom: 2px solid #4a7c2c; padding-bottom: 10px; margin-bottom: 15px; }
           table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
@@ -126,301 +137,131 @@ export class ReportGeneratorService {
         </header>
     `;
 
-    // Resumen Ejecutivo
-    if (options.content.includes('map') || options.content.includes('stats') || options.content.includes('classes')) {
-      content += `
-        <div class="section">
-          <div class="section-title">Resumen Ejecutivo</div>
-          <p>Análisis de segmentación de áreas del Campus ESPOL correspondiente a: <strong>${monthLabel}</strong></p>
-          <p style="margin-top: 10px;">Este informe presenta un análisis detallado de la distribución de áreas verdes, edificios, calles y otros elementos identificados en el campus. Los datos permiten evaluar el estado de la infraestructura verde y su relación con otras áreas del terreno.</p>
-        </div>
-      `;
-    }
-
-    // Estadísticas de Cobertura
-    if (options.content.includes('stats')) {
-      let statsContent = '';
-      
-      // Si hay datos de píxeles, usar esos; si no, usar celdas
-      if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
-        const totalPixels = options.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-        const vegetationArea = options.vegetationAreaM2 || 0;
-        const totalArea = options.totalAreaM2 || 0;
-        const greenPercentage = options.vegetationCoveragePercentage || 0;
+    // Si hay datos de múltiples períodos, generar secciones por período
+    if (options.multiPeriodData && options.multiPeriodData.length > 0) {
+      const multiPeriodData = options.multiPeriodData; // Asignación local para type narrowing
+      multiPeriodData.forEach((periodData, index) => {
+        content += `<div class="period-header"><div class="period-title">📅 ${periodData.monthLabel}</div></div>`;
         
-        statsContent = `
-        <div class="section">
-          <div class="section-title">Estadísticas de Cobertura</div>
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-label">Área Total (m²)</div>
-              <div class="stat-value">${totalArea.toFixed(2)}</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Cobertura Verde</div>
-              <div class="stat-value">${greenPercentage.toFixed(2)}%</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Áreas Verdes (m²)</div>
-              <div class="stat-value">${vegetationArea.toFixed(2)}</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Total de Clases</div>
-              <div class="stat-value">${options.pixelCoverageData.length}</div>
-            </div>
-          </div>
-        </div>
-        `;
-      } else {
-        const stats = this.calculateStatistics(cells);
-        statsContent = `
-        <div class="section">
-          <div class="section-title">Estadísticas de Cobertura</div>
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-label">Total de Celdas</div>
-              <div class="stat-value">${cells.length}</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Cobertura Verde</div>
-              <div class="stat-value">${stats.greenPercentage}%</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Áreas Verdes</div>
-              <div class="stat-value">${stats.greenCount}</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Edificios</div>
-              <div class="stat-value">${stats.buildingCount}</div>
-            </div>
-          </div>
-        </div>
-        `;
-      }
-      
-      content += statsContent;
-    }
-
-    // Distribución de Clases
-    if (options.content.includes('classes')) {
-      let classesContent = '';
-      
-      if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
-        // Usar datos filtrados (sin "Sin etiqueta") para la tabla
-        const dataToDisplay = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 
-          ? options.filteredPixelCoverageData 
-          : options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
-        
-        // Calcular área total filtrada
-        const totalAreaFiltered = dataToDisplay.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
-        
-        // Ordenar por área descendente (igual que en el dashboard)
-        const sortedData = [...dataToDisplay].sort((a, b) => (b.area_m2 || 0) - (a.area_m2 || 0));
-        
-        classesContent = `
-        <div class="section">
-          <div class="section-title">Cobertura de Área (m²)</div>
-          <div style="margin-top: 15px;">
-            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 2px solid #f0f0f0; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #2d5016;">
-              <span>Área total (m²):</span>
-              <span>${totalAreaFiltered.toFixed(2)}</span>
-            </div>
-          </div>
-          <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;">
-            <thead>
-              <tr style="background-color: #f5f5f5;">
-                <th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 30px;">Color</th>
-                <th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 110px;">Clase</th>
-                <th style="padding: 8px 4px; text-align: right; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 60px;">Área (m²)</th>
-                <th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 65px;">Cobertura (%)</th>
-                <th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 140px;">Visualización</th>
-              </tr>
-            </thead>
-            <tbody>
-      `;
-        
-        sortedData.forEach(item => {
-          const percentage = totalAreaFiltered > 0 ? ((item.area_m2 || 0) / totalAreaFiltered * 100).toFixed(2) : '0.00';
-          const classColor = this.getColorForClass(item.class_name);
-          classesContent += `
-              <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 8px 4px; text-align: center;">
-                  <div style="width: 20px; height: 20px; border-radius: 3px; background-color: ${classColor}; border: 1px solid #ccc; display: inline-block; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                </td>
-                <td style="padding: 8px 6px; font-size: 12px;">${item.class_name}</td>
-                <td style="padding: 8px 4px; text-align: right; font-size: 12px;">${(item.area_m2 || 0).toFixed(2)}</td>
-                <td style="padding: 8px 4px; text-align: center; font-weight: 600; color: #2d5016; font-size: 12px;">${percentage}%</td>
-                <td style="padding: 8px 6px;">
-                  <div style="width: 100%; height: 16px; background-color: #f0f0f0; border-radius: 2px; overflow: hidden; border: 1px solid #ddd; print-color-adjust: exact; -webkit-print-color-adjust: exact;">
-                    <div style="height: 100%; width: ${percentage}%; background-color: ${classColor}; border-radius: 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                  </div>
-                </td>
-              </tr>
-          `;
+        // Generar contenido para este período
+        content += this.buildPeriodContent({
+          ...options,
+          monthLabel: periodData.monthLabel,
+          pixelCoverageData: periodData.pixelCoverageData,
+          filteredPixelCoverageData: periodData.filteredPixelCoverageData,
+          vegetationCoveragePercentage: periodData.vegetationCoveragePercentage,
+          vegetationAreaM2: periodData.vegetationAreaM2,
+          totalAreaM2: periodData.totalAreaM2,
+          multipleMasks: periodData.multipleMasks,
+          isMultipleMasks: periodData.isMultipleMasks
         });
         
-        classesContent += `
-            </tbody>
-          </table>
-        </div>
-      `;
-      } else {
-        const distribution = this.getClassDistribution(cells);
-        const totalCount = cells.length;
-        classesContent = `
-        <div class="section">
-          <div class="section-title">Cobertura por Clase</div>
-          <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;">
-            <thead>
-              <tr style="background-color: #f5f5f5;">
-                <th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 30px;">Color</th>
-                <th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 110px;">Clase</th>
-                <th style="padding: 8px 4px; text-align: right; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 50px;">Cantidad</th>
-                <th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 65px;">Cobertura (%)</th>
-                <th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 140px;">Visualización</th>
-              </tr>
-            </thead>
-            <tbody>
-      `;
-        
-        for (const [className, data] of Object.entries(distribution)) {
-          if (data.count > 0) {
-            const percentage = totalCount > 0 ? Math.round((data.count / totalCount) * 100) : 0;
-            classesContent += `
-              <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 8px 4px; text-align: center;">
-                  <div style="width: 20px; height: 20px; border-radius: 3px; background-color: ${data.color}; border: 1px solid #ccc; display: inline-block; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                </td>
-                <td style="padding: 8px 6px; font-size: 12px;">${className}</td>
-                <td style="padding: 8px 4px; text-align: right; font-size: 12px;">${data.count}</td>
-                <td style="padding: 8px 4px; text-align: center; font-weight: 600; color: #2d5016; font-size: 12px;">${percentage}%</td>
-                <td style="padding: 8px 6px;">
-                  <div style="width: 100%; height: 16px; background-color: #f0f0f0; border-radius: 2px; overflow: hidden; border: 1px solid #ddd; print-color-adjust: exact; -webkit-print-color-adjust: exact;">
-                    <div style="height: 100%; width: ${percentage}%; background-color: ${data.color}; border-radius: 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div>
-                  </div>
-                </td>
-              </tr>
-          `;
-          }
+        // Page break entre períodos (excepto el último)
+        if (index < multiPeriodData.length - 1) {
+          content += `<div style="page-break-after: always;"></div>`;
         }
+      });
+    } else {
+      // Generar contenido de un único período
+      content += this.buildPeriodContent(options);
+    }
+
+    // Agregar Análisis Comparativo y Recomendaciones solo una vez al final
+    if (options.content.includes('comparison') && options.multiPeriodData && options.multiPeriodData.length > 1) {
+      let comparisonContent = `<div class="section"><div class="section-title">Análisis Comparativo</div>`;
+      
+      // Crear gráfica de líneas con SVG
+      const periods = options.multiPeriodData;
+      const vegetationAreas = periods.map(p => p.vegetationAreaM2 || 0);
+      const maxArea = Math.max(...vegetationAreas);
+      const minArea = Math.min(...vegetationAreas);
+      const range = maxArea - minArea || maxArea || 1;
+      
+      const chartWidth = 600;
+      const chartHeight = 300;
+      const padding = 60;
+      const pointRadius = 6;
+      
+      let svgContent = `<h4 style="font-size: 14px; font-weight: bold; margin-bottom: 12px; margin-top: 20px; text-align: center;">Evolución de Áreas Verdes por Período</h4>`;
+      svgContent += `<svg width="${chartWidth}" height="${chartHeight}" style="border: 1px solid #ddd; display: block; margin: 20px auto;">`;
+      
+      // Ejes
+      svgContent += `<line x1="${padding}" y1="${chartHeight - padding}" x2="${chartWidth - padding}" y2="${chartHeight - padding}" stroke="#333" stroke-width="2"/>`;
+      svgContent += `<line x1="${padding}" y1="${padding}" x2="${padding}" y2="${chartHeight - padding}" stroke="#333" stroke-width="2"/>`;
+      
+      // Etiquetas de ejes
+      svgContent += `<text x="${chartWidth/2}" y="${chartHeight - 10}" text-anchor="middle" font-size="12" fill="#666">Períodos</text>`;
+      svgContent += `<text x="15" y="${chartHeight/2}" text-anchor="middle" font-size="12" fill="#666" transform="rotate(-90 15 ${chartHeight/2})">Área Verde (m²)</text>`;
+      
+      // Calcular puntos
+      const xStep = (chartWidth - 2 * padding) / (periods.length + 1);
+      const points = vegetationAreas.map((area, idx) => {
+        const x = padding + (idx + 1) * xStep;
+        const y = chartHeight - padding - ((area - minArea) / range) * (chartHeight - 2 * padding);
+        return { x, y, area, label: periods[idx].monthLabel };
+      });
+      
+      // Dibujar línea
+      let pathData = '';
+      points.forEach((point, idx) => {
+        if (idx === 0) {
+          pathData += `M ${point.x} ${point.y}`;
+        } else {
+          pathData += ` L ${point.x} ${point.y}`;
+        }
+      });
+      svgContent += `<path d="${pathData}" stroke="#4a7c2c" stroke-width="2" fill="none"/>`;
+      
+      // Dibujar puntos
+      points.forEach(point => {
+        svgContent += `<circle cx="${point.x}" cy="${point.y}" r="${pointRadius}" fill="#2d5016" stroke="#fff" stroke-width="2"/>`;
+        svgContent += `<text x="${point.x}" y="${chartHeight - padding + 25}" text-anchor="middle" font-size="11" fill="#333">${point.label}</text>`;
+        svgContent += `<text x="${point.x}" y="${point.y - 15}" text-anchor="middle" font-size="11" font-weight="600" fill="#2d5016">${point.area.toFixed(0)} m²</text>`;
+      });
+      
+      svgContent += `</svg>`;
+      
+      comparisonContent += svgContent + `</div>`;
+      
+      // Tabla de evolución de áreas verdes
+      comparisonContent += `
+        <div style="margin-top: 30px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <thead>
+              <tr style="background-color: #f5f5f5; border-bottom: 2px solid #333;">
+                <th style="padding: 8px; text-align: left; border: 1px solid #ddd; font-weight: bold;">Período</th>
+                <th style="padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;">Área Verde (m²)</th>
+                <th style="padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;">Cambio (m²)</th>
+                <th style="padding: 8px; text-align: center; border: 1px solid #ddd; font-weight: bold;">Cambio (%)</th>
+              </tr>
+            </thead>
+            <tbody>`;
+      
+      vegetationAreas.forEach((area, idx) => {
+        const period = periods[idx];
+        const change = idx > 0 ? area - vegetationAreas[idx - 1] : 0;
+        const changePercent = idx > 0 ? ((change / vegetationAreas[idx - 1]) * 100) : 0;
+        const changeText = idx > 0 ? (change >= 0 ? `+${change.toFixed(2)}` : `${change.toFixed(2)}`) : '—';
+        const changePercentText = idx > 0 ? (changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`) : '—';
+        const changeColor = idx > 0 ? (change >= 0 ? '#4a7c2c' : '#d32f2f') : '#999';
         
-        classesContent += `
+        comparisonContent += `
+              <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 8px; border: 1px solid #ddd;">${period.monthLabel}</td>
+                <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${area.toFixed(2)}</td>
+                <td style="padding: 8px; text-align: center; border: 1px solid #ddd; color: ${changeColor}; font-weight: bold;">${changeText}</td>
+                <td style="padding: 8px; text-align: center; border: 1px solid #ddd; color: ${changeColor}; font-weight: bold;">${changePercentText}</td>
+              </tr>`;
+      });
+      
+      comparisonContent += `
             </tbody>
           </table>
-        </div>
-      `;
-      }
+        </div>`;
       
-      content += classesContent;
+      content += comparisonContent;
     }
 
-    // Mapa Segmentado
-    if (options.content.includes('map')) {
-      let mapContent = '';
-      
-      // Si hay máscaras múltiples, mostrarlas todas
-      if (options.isMultipleMasks && options.multipleMasks && options.multipleMasks.length > 0) {
-        mapContent = `
-        <div class="section" style="page-break-inside: avoid;">
-          <div class="section-title">Mapas Segmentados de Múltiples Escenas</div>
-          <p style="font-size: 12px; color: #666; margin-bottom: 15px;">Se muestran las imágenes de segmentación de las ${options.multipleMasks.length} escena(s) analizadas en el período seleccionado:</p>
-      `;
-        
-        options.multipleMasks.forEach((mask, index) => {
-          mapContent += `
-          <div style="margin-bottom: 20px; page-break-inside: avoid;">
-            <h3 style="font-size: 13px; font-weight: 600; color: #2d5016; margin-bottom: 8px;">Escena ${index + 1}</h3>
-            <div style="text-align: center; margin: 15px 0;">
-              <img src="${mask.imageUrl}" style="max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 6px; display: block; margin: 0 auto;">
-            </div>
-            <p style="font-size: 11px; color: #999; text-align: center; margin-top: 8px;">Segmentación de ${mask.sceneId}</p>
-          </div>
-        `;
-        });
-        
-        mapContent += `
-        </div>
-      `;
-      } else if (options.maskImageUrl && options.maskImageUrl.trim() !== '') {
-        // Si hay una imagen de máscara individual válida, mostrarla
-        mapContent = `
-        <div class="section" style="page-break-inside: avoid;">
-          <div class="section-title">Mapa Segmentado</div>
-          <div style="text-align: center; margin: 20px 0; page-break-inside: avoid;">
-            <img src="${options.maskImageUrl}" style="max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 6px; display: block; margin: 0 auto;">
-          </div>
-          <p style="font-size: 12px; color: #666; margin-top: 10px; text-align: center;">Imagen de segmentación del área analizada según los filtros aplicados en el período seleccionado.</p>
-        </div>
-      `;
-      }
-      
-      if (mapContent) {
-        content += mapContent;
-      }
-    }
-
-    // Metadatos Técnicos
-    if (options.content.includes('metadata')) {
-      const appliedFilters = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 
-        ? `${options.filteredPixelCoverageData.length} clase(s) seleccionada(s)`
-        : 'Ninguno';
-      
-      content += `
-        <div class="section">
-          <div class="section-title">Metadatos Técnicos</div>
-          <table>
-            <tr>
-              <td style="font-weight: 600; width: 30%;">Fecha de Captura</td>
-              <td>${monthLabel}</td>
-            </tr>
-            <tr>
-              <td style="font-weight: 600;">Resolución</td>
-              <td>Alta (píxeles de ${(options.pixelCoverageData && options.pixelCoverageData.length > 0 ? '1m²' : '100m²')})</td>
-            </tr>
-            <tr>
-              <td style="font-weight: 600;">Filtros Aplicados (Clases)</td>
-              <td>${appliedFilters}</td>
-            </tr>
-            <tr>
-              <td style="font-weight: 600;">Período Temporal</td>
-              <td>${monthLabel}</td>
-            </tr>
-            <tr>
-              <td style="font-weight: 600;">Región Analizada</td>
-              <td>${options.region === 'full' ? 'Campus Completo' : options.region === 'green-only' ? 'Solo Áreas Verdes' : 'Subregión Personalizada'}</td>
-            </tr>
-            <tr>
-              <td style="font-weight: 600;">Sistema</td>
-              <td>SIGMA v2.0 - ESPOL</td>
-            </tr>
-          </table>
-        </div>
-      `;
-    }
-
-    // Análisis Comparativo
-    if (options.content.includes('comparison')) {
-      content += `
-        <div class="section">
-          <div class="section-title">Análisis Comparativo</div>
-          <p style="margin-bottom: 15px;"><strong>Comparación Temporal de Áreas Verdes:</strong></p>
-          <div class="trend-item">
-            <strong>Período Anterior (Septiembre 2025):</strong><br>
-            Cobertura Verde: 32% | Áreas Verdes: 6 celdas
-          </div>
-          <div class="trend-item">
-            <strong>Período Actual (Octubre 2025):</strong><br>
-            Cobertura Verde: 35% | Áreas Verdes: 7 celdas
-          </div>
-          <p style="margin-top: 15px;">
-            <strong>Variación:</strong> +3% de cobertura verde | +1 celda de área verde<br>
-            <strong>Interpretación:</strong> Se ha detectado un incremento en la cobertura vegetal del campus, posiblemente debido a trabajos de mantenimiento o plantación.
-          </p>
-        </div>
-      `;
-    }
-
-    // Recomendaciones
     if (options.content.includes('recommendations')) {
       content += `
         <div class="section">
@@ -467,28 +308,145 @@ export class ReportGeneratorService {
     return content;
   }
 
+  private buildPeriodContent(options: ReportOptions): string {
+    const monthLabel = options.monthLabel || 'Octubre 2025';
+    let content = '';
+
+    // Resumen Ejecutivo
+    if (options.content.includes('map') || options.content.includes('stats') || options.content.includes('classes')) {
+      content += `<div class="section"><div class="section-title">Resumen Ejecutivo</div><p>Análisis de segmentación de áreas del Campus ESPOL correspondiente a: <strong>${monthLabel}</strong>. Este informe presenta un análisis detallado de la distribución de áreas verdes, edificios, calles y otros elementos identificados en el campus. Los datos permiten evaluar el estado de la infraestructura verde y su relación con otras áreas del terreno.</p></div>`;
+    }
+
+    // Estadísticas de Cobertura
+    if (options.content.includes('stats')) {
+      let statsContent = '';
+      if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
+        const totalArea = options.totalAreaM2 || 0;
+        const greenPercentage = options.vegetationCoveragePercentage || 0;
+        const vegetationArea = options.vegetationAreaM2 || 0;
+        const totalClassCount = options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta').length;
+        statsContent = `<div class="section"><div class="section-title">Estadísticas de Cobertura</div><div class="stats-grid"><div class="stat-card"><div class="stat-label">Área Total (m²)</div><div class="stat-value">${totalArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Cobertura Verde</div><div class="stat-value">${greenPercentage.toFixed(2)}%</div></div><div class="stat-card"><div class="stat-label">Áreas Verdes (m²)</div><div class="stat-value">${vegetationArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Total de Clases</div><div class="stat-value">${totalClassCount}</div></div></div></div>`;
+      }
+      content += statsContent;
+    }
+
+    // Distribución de Clases
+    if (options.content.includes('classes')) {
+      let classesContent = '';
+      if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
+        const dataToDisplay = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? options.filteredPixelCoverageData : options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
+        const totalAreaFiltered = dataToDisplay.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+        const sortedData = [...dataToDisplay].sort((a, b) => (b.area_m2 || 0) - (a.area_m2 || 0));
+        classesContent = `<div class="section"><div class="section-title">Cobertura de Área (m²)</div><div style="margin-top: 15px;"><div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 2px solid #f0f0f0; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #2d5016;"><span>Área total (m²):</span><span>${totalAreaFiltered.toFixed(2)}</span></div></div><table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;"><thead><tr style="background-color: #f5f5f5;"><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 30px;">Color</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 110px;">Clase</th><th style="padding: 8px 4px; text-align: right; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 60px;">Área (m²)</th><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 65px;">Cobertura (%)</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 140px;">Visualización</th></tr></thead><tbody>`;
+        sortedData.forEach(item => {
+          const percentage = totalAreaFiltered > 0 ? ((item.area_m2 || 0) / totalAreaFiltered * 100).toFixed(2) : '0.00';
+          const classColor = this.getColorForClass(item.class_name);
+          classesContent += `<tr style="border-bottom: 1px solid #f0f0f0;"><td style="padding: 8px 4px; text-align: center;"><div style="width: 20px; height: 20px; border-radius: 3px; background-color: ${classColor}; border: 1px solid #ccc; display: inline-block; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></td><td style="padding: 8px 6px; font-size: 12px;">${item.class_name}</td><td style="padding: 8px 4px; text-align: right; font-size: 12px;">${(item.area_m2 || 0).toFixed(2)}</td><td style="padding: 8px 4px; text-align: center; font-weight: 600; color: #2d5016; font-size: 12px;">${percentage}%</td><td style="padding: 8px 6px;"><div style="width: 100%; height: 16px; background-color: #f0f0f0; border-radius: 2px; overflow: hidden; border: 1px solid #ddd; print-color-adjust: exact; -webkit-print-color-adjust: exact;"><div style="height: 100%; width: ${percentage}%; background-color: ${classColor}; border-radius: 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></div></td></tr>`;
+        });
+        classesContent += `</tbody></table></div>`;
+      }
+      content += classesContent;
+    }
+
+    // Metadatos Técnicos
+    if (options.content.includes('metadata')) {
+      const appliedFilters = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? `${options.filteredPixelCoverageData.length} clase(s) seleccionada(s)` : 'Ninguno';
+      content += `<div class="section"><div class="section-title">Metadatos Técnicos</div><table style="font-size: 14px;"><tr><td style="font-weight: 600; width: 30%;">Filtros Aplicados (Clases)</td><td>${appliedFilters}</td></tr><tr><td style="font-weight: 600;">Período Temporal</td><td>${monthLabel}</td></tr><tr><td style="font-weight: 600;">Región Analizada</td><td>${options.region === 'full' ? 'Campus Completo' : options.region === 'green-only' ? 'Solo Áreas Verdes' : 'Subregión Personalizada'}</td></tr><tr><td style="font-weight: 600;">Sistema</td><td>SIGMA v2.0 - ESPOL</td></tr><tr><td style="font-weight: 600;">Precisión</td><td>85%</td></tr></table></div>`;
+    }
+
+    // Mapa Segmentado
+    if (options.content.includes('map')) {
+      let mapContent = '';
+      if (options.isMultipleMasks && options.multipleMasks && options.multipleMasks.length > 0) {
+        mapContent = `<div class="section" style="page-break-inside: avoid;"><div class="section-title">Mapas Segmentados de Múltiples Escenas</div><p style="font-size: 12px; color: #666; margin-bottom: 15px;">Se muestran las imágenes de segmentación de las ${options.multipleMasks.length} escena(s) analizadas en el período seleccionado:</p>`;
+        options.multipleMasks.forEach((mask, index) => {
+          mapContent += `<div style="margin-bottom: 20px; page-break-inside: avoid;"><h3 style="font-size: 13px; font-weight: 600; color: #2d5016; margin-bottom: 8px;">Escena ${index + 1}</h3><div style="text-align: center; margin: 15px 0;"><img src="${mask.imageUrl}" style="max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 6px; display: block; margin: 0 auto;"></div><p style="font-size: 11px; color: #999; text-align: center; margin-top: 8px;">Segmentación de ${mask.sceneId}</p></div>`;
+        });
+        mapContent += `</div>`;
+      } else if (options.maskImageUrl && options.maskImageUrl.trim() !== '') {
+        mapContent = `<div class="section" style="page-break-inside: avoid;"><div class="section-title">Mapa Segmentado</div><div style="text-align: center; margin: 20px 0; page-break-inside: avoid;"><img src="${options.maskImageUrl}" style="max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 6px; display: block; margin: 0 auto;"></div><p style="font-size: 12px; color: #666; margin-top: 10px; text-align: center;">Imagen de segmentación del área analizada según los filtros aplicados en el período seleccionado.</p></div>`;
+      }
+      if (mapContent) {
+        content += mapContent;
+      }
+    }
+
+    return content;
+  }
+
   private buildCSVContent(options: ReportOptions): string {
-    const cells = options.cells || [];
-    const monthLabel = options.monthLabel || 'Noviembre 2024';
     let csv = 'SIGMA - Sistema Integrado de Gestión y Monitoreo de Áreas Verdes\n';
     csv += `Informe generado: ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES')}\n`;
-    csv += `Período: ${monthLabel}\n\n`;
 
+    // Si hay múltiples períodos, generar secciones por período
+    if (options.multiPeriodData && options.multiPeriodData.length > 0) {
+      const multiPeriodData = options.multiPeriodData; // Asignación local para type narrowing
+      csv += `Período: Múltiples períodos (${multiPeriodData.length})\n\n`;
+      
+      multiPeriodData.forEach((periodData, periodIndex) => {
+        csv += `===== PERÍODO ${periodIndex + 1}: ${periodData.monthLabel} =====\n\n`;
+        csv += this.buildPeriodCSVContent(
+          {
+            ...options,
+            monthLabel: periodData.monthLabel,
+            pixelCoverageData: periodData.pixelCoverageData,
+            filteredPixelCoverageData: periodData.filteredPixelCoverageData,
+            vegetationCoveragePercentage: periodData.vegetationCoveragePercentage,
+            vegetationAreaM2: periodData.vegetationAreaM2,
+            totalAreaM2: periodData.totalAreaM2,
+            multipleMasks: periodData.multipleMasks,
+            isMultipleMasks: periodData.isMultipleMasks
+          }
+        );
+        
+        // Separador entre períodos
+        if (periodIndex < multiPeriodData.length - 1) {
+          csv += '\n========================================\n\n';
+        }
+      });
+
+      // Agregar tabla de análisis comparativo si se solicita
+      if (options.content.includes('comparison') && multiPeriodData.length > 1) {
+        csv += '\n========================================\n';
+        csv += 'ANÁLISIS COMPARATIVO\n';
+        csv += '========================================\n\n';
+        csv += 'Evolución de Áreas Verdes por Período\n';
+        csv += 'Período,Área Verde (m²),Cambio (m²),Cambio (%)\n';
+        
+        const vegetationAreas = multiPeriodData.map(p => p.vegetationAreaM2 || 0);
+        vegetationAreas.forEach((area, idx) => {
+          const period = multiPeriodData[idx];
+          const change = idx > 0 ? area - vegetationAreas[idx - 1] : 0;
+          const changePercent = idx > 0 ? ((change / vegetationAreas[idx - 1]) * 100) : 0;
+          const changeText = idx > 0 ? (change >= 0 ? `+${change.toFixed(2)}` : `${change.toFixed(2)}`) : '—';
+          const changePercentText = idx > 0 ? (changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`) : '—';
+          
+          csv += `${period.monthLabel},${area.toFixed(2)},${changeText},${changePercentText}\n`;
+        });
+        csv += '\n';
+      }
+    } else {
+      // Generar contenido de un único período
+      csv += `Período: ${options.monthLabel || 'Noviembre 2024'}\n\n`;
+      csv += this.buildPeriodCSVContent(options);
+    }
+
+    return csv;
+  }
+
+  private buildPeriodCSVContent(options: ReportOptions): string {
+    let csv = '';
+    
     if (options.content.includes('stats')) {
       csv += 'ESTADÍSTICAS DE COBERTURA\n';
       
       if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
         const totalPixels = options.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+        const totalClassCount = options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta').length;
         csv += 'Área Total (m²),' + (options.totalAreaM2 || 0).toFixed(2) + '\n';
         csv += 'Cobertura Verde,' + (options.vegetationCoveragePercentage || 0).toFixed(2) + '%\n';
         csv += 'Áreas Verdes (m²),' + (options.vegetationAreaM2 || 0).toFixed(2) + '\n';
-        csv += 'Total de Clases,' + options.pixelCoverageData.length + '\n';
-      } else {
-        const stats = this.calculateStatistics(cells);
-        csv += 'Total de Celdas,' + cells.length + '\n';
-        csv += 'Cobertura Verde,' + stats.greenPercentage + '%\n';
-        csv += 'Áreas Verdes,' + stats.greenCount + '\n';
-        csv += 'Edificios,' + stats.buildingCount + '\n';
+        csv += 'Total de Clases,' + totalClassCount + '\n';
       }
       csv += '\n';
     }
@@ -509,12 +467,6 @@ export class ReportGeneratorService {
         csv += 'Clase,Píxeles,Área (m²)\n';
         options.pixelCoverageData.forEach(item => {
           csv += `"${item.class_name}",${item.pixel_count},${(item.area_m2 || 0).toFixed(2)}\n`;
-        });
-      } else {
-        csv += 'ID,Nombre,Tipo,Área,Clase\n';
-        cells.forEach(cell => {
-          const classNameSpanish = this.translateClassId(cell.classId);
-          csv += `${cell.id},"${cell.name}","${cell.type}","${cell.area}","${classNameSpanish}"\n`;
         });
       }
       csv += '\n';
@@ -539,24 +491,18 @@ export class ReportGeneratorService {
           const percentage = totalAreaFiltered > 0 ? ((item.area_m2 || 0) / totalAreaFiltered * 100).toFixed(2) : '0.00';
           csv += `"${item.class_name}",${(item.area_m2 || 0).toFixed(2)},${percentage}%\n`;
         });
-      } else {
-        csv += 'Clase,Cantidad,Porcentaje\n';
-        const distribution = this.getClassDistribution(cells);
-        for (const [className, data] of Object.entries(distribution)) {
-          const percentage = cells.length > 0 ? Math.round((data.count / cells.length) * 100) : 0;
-          csv += `"${className}",${data.count},${percentage}%\n`;
-        }
       }
       csv += '\n';
     }
 
     if (options.content.includes('metadata')) {
       csv += 'METADATOS TÉCNICOS\n';
-      csv += 'Fecha de Captura,' + options.monthLabel + '\n';
+      const appliedFilters = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? `${options.filteredPixelCoverageData.length} clase(s) seleccionada(s)` : 'Ninguno';
+      csv += 'Filtros Aplicados (Clases),' + appliedFilters + '\n';
       csv += 'Período Temporal,' + options.monthLabel + '\n';
       csv += 'Región Analizada,' + (options.region === 'full' ? 'Campus Completo' : options.region === 'green-only' ? 'Solo Áreas Verdes' : 'Subregión Personalizada') + '\n';
-      csv += 'Filtros Aplicados,' + (options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? `${options.filteredPixelCoverageData.length} clase(s) seleccionada(s)` : 'Ninguno') + '\n';
-      csv += 'Sistema,SIGMA v2.0 - ESPOL\n\n';
+      csv += 'Sistema,SIGMA v2.0 - ESPOL\n';
+      csv += 'Precisión,85%\n';
     }
 
     return csv;
@@ -640,50 +586,6 @@ export class ReportGeneratorService {
     }
     const hue = Math.abs(hash) % 360;
     return `hsl(${hue}, 70%, 45%)`;
-  }
-
-  private translateClassId(classId: string): string {
-    const translations: { [key: string]: string } = {
-      'green': 'Áreas Verdes',
-      'building': 'Edificios',
-      'street': 'Calles',
-      'parking': 'Parqueaderos',
-      'water': 'Cuerpos de Agua'
-    };
-    return translations[classId] || classId;
-  }
-
-  private calculateStatistics(cells: MapCell[]): { greenCount: number; greenPercentage: number; buildingCount: number } {
-    const greenCount = cells.filter(c => c.classId === 'green').length;
-    const buildingCount = cells.filter(c => c.classId === 'building').length;
-    const greenPercentage = cells.length > 0 ? Math.round((greenCount / cells.length) * 100) : 0;
-
-    return { greenCount, greenPercentage, buildingCount };
-  }
-
-  private getClassDistribution(cells: MapCell[]): { [key: string]: { count: number; color: string } } {
-    const distribution: { [key: string]: { count: number; color: string } } = {
-      'Áreas Verdes': { count: 0, color: '#4a7c2c' },
-      'Edificios': { count: 0, color: '#8b7355' },
-      'Calles': { count: 0, color: '#808080' },
-      'Parqueaderos': { count: 0, color: '#a9a9a9' },
-      'Cuerpos de Agua': { count: 0, color: '#4a90e2' }
-    };
-
-    cells.forEach(cell => {
-      if (cell.type === 'Áreas Verdes') distribution['Áreas Verdes'].count++;
-      else if (cell.type === 'Edificios') distribution['Edificios'].count++;
-      else if (cell.type === 'Calles') distribution['Calles'].count++;
-      else if (cell.type === 'Parqueaderos') distribution['Parqueaderos'].count++;
-      else if (cell.type === 'Cuerpos de Agua') distribution['Cuerpos de Agua'].count++;
-    });
-
-    return distribution;
-  }
-
-  private getCurrentDateString(): string {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }
 
   private generateFileName(format: 'pdf' | 'csv'): string {

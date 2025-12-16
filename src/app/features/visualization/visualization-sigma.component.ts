@@ -8,13 +8,13 @@ import { VisualizationHeaderComponent } from '../components/header/visualization
 import { DownloadModalComponent } from '../components/download-modal/download-modal.component';
 import { SegmentationProgressDialogComponent } from '../components/segmentation-progress-dialog/segmentation-progress-dialog.component';
 import { ChartBar, ClassDistributionStat, ClassType, MonthFilter } from '../models/visualization.models';
-import { ReportGeneratorService } from '../services/report-generator.service';
+import { ReportGeneratorService, PeriodReportData, MaskData } from '../services/report-generator.service';
 import { ScenesService } from '../services/scenes.service';
 import { SegmentsService } from '../services/segments.service';
 import { RegionsService } from '../services/regions.service';
 import { SegmentFeature, SceneResponse, Region, PeriodInfo, PixelCoverageItem, SegmentationCoverageResponse } from '../models/api.models';
 import { CLASS_CATALOG, getClassConfig } from '../models/class-catalog';
-import { finalize } from 'rxjs';
+import { finalize, forkJoin, of } from 'rxjs';
 
 @Component({
   selector: 'app-visualization-sigma',
@@ -68,6 +68,9 @@ export class VisualizationSigmaComponent implements OnInit {
   
   // ===== MÁSCARAS MÚLTIPLES =====
   multipleMaskImages: string[] = [];  // URLs de máscaras múltiples para reportes
+  
+  // ===== DATOS DE MÚLTIPLES PERÍODOS PARA REPORTES =====
+  multiPeriodReportData: PeriodReportData[] = [];  // Datos para cada período seleccionado en reportes
 
   months: MonthFilter[] = [
     { id: '2024-08', label: 'Agosto 2024', selected: false },
@@ -540,7 +543,6 @@ export class VisualizationSigmaComponent implements OnInit {
         ? (vegetationAreaM2 / this.filteredTotalAreaM2) * 100 
         : 0;
       
-      console.log('[getCoveragePercentage] Datos:', { vegetationAreaM2, filteredTotalAreaM2: this.filteredTotalAreaM2, percentage });
       return parseFloat(percentage.toFixed(2));
     }
     
@@ -721,7 +723,141 @@ export class VisualizationSigmaComponent implements OnInit {
     return this.currentMaskImageUrl;
   }
 
-  onDownloadModalSubmit(data: { format: string; content: string[]; region: string }): void {
+  private loadDataForMultiPeriodReport(data: { format: string; content: string[]; region: string }): void {
+    const selectedMonths = this.getSelectedMonths();
+    
+    // Si solo hay un período, generar reporte simple
+    if (selectedMonths.length === 1) {
+      this.generateSinglePeriodReport(data);
+      return;
+    }
+
+    // Para múltiples períodos, cargar datos de cada uno replicando loadAggregatedPixelCoverage
+    const requests: any[] = [];
+    
+    selectedMonths.forEach(month => {
+      // Cargar cobertura agregada para cada período
+      requests.push(
+        this.segmentsService.getAggregatedPixelCoverage(this.selectedRegionId, month.id)
+      );
+    });
+    
+    // También cargar máscaras para cada período
+    const maskRequests: any[] = [];
+    const classesToShow = this.classTypes.filter((c: ClassType) => c.selected).map((c: ClassType) => c.id);
+    const allClassIds = this.classTypes.map((c: ClassType) => c.id);
+    const classIdsToUse = classesToShow.length > 0 ? classesToShow : allClassIds;
+    
+    selectedMonths.forEach(month => {
+      // Cargar máscaras para cada período
+      maskRequests.push(
+        this.segmentsService.getMasksForPeriod(this.selectedRegionId, month.id, classIdsToUse)
+      );
+    });
+
+    // Ejecutar todas las solicitudes en paralelo
+    forkJoin([...requests, ...maskRequests]).subscribe({
+      next: (allResponses) => {
+        // Las primeras N respuestas son cobertura, las siguientes N son máscaras
+        const coverageResponses = allResponses.slice(0, selectedMonths.length);
+        const maskResponses = allResponses.slice(selectedMonths.length);
+        
+        // Procesar respuestas igual que loadAggregatedPixelCoverage hace
+        this.multiPeriodReportData = selectedMonths.map((month, index) => {
+          const response = coverageResponses[index];
+          const maskResponse = maskResponses[index];
+          
+          // Validar que la respuesta de cobertura tenga la estructura esperada
+          if (!response || !response.coverageByClass || !Array.isArray(response.coverageByClass)) {
+            console.warn(`No valid coverage data for period ${month.label}`);
+            return null;
+          }
+          
+          // Procesar igual que en loadAggregatedPixelCoverage
+          const pixelCoverageData = response.coverageByClass
+            .filter((item: any) => item.class_name?.toLowerCase() !== 'unlabeled')
+            .map((item: any) => ({
+              class_id: 0,
+              class_name: item.class_name,
+              pixel_count: item.pixel_count,
+              coverage_percentage: item.coverage_percentage,
+              area_m2: item.area_m2 || 0
+            }));
+
+          // Recalcular totales sin "unlabeled"
+          const totalPixels = pixelCoverageData.reduce((sum: number, item: any) => sum + item.pixel_count, 0);
+          const totalAreaM2 = pixelCoverageData.reduce((sum: number, item: any) => sum + (item.area_m2 || 0), 0);
+          
+          // Filtrar según clases seleccionadas (igual que filterPixelCoverageByClass)
+          let filteredPixelCoverageData = pixelCoverageData;
+          if (this.classTypes.filter((c: ClassType) => c.selected).length === 0) {
+            // Si no hay clases seleccionadas, mostrar todas excepto "unlabeled"
+            filteredPixelCoverageData = pixelCoverageData
+              .filter((item: any) => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
+          } else {
+            // Filtrar por clases seleccionadas
+            const selectedLabels = this.classTypes
+              .filter((c: ClassType) => c.selected)
+              .map((c: ClassType) => c.label);
+            filteredPixelCoverageData = pixelCoverageData.filter((item: any) =>
+              selectedLabels.some((label: string) => item.class_name?.includes(label))
+            );
+          }
+          
+          const filteredTotalAreaM2 = filteredPixelCoverageData.reduce((sum: number, item: any) => sum + (item.area_m2 || 0), 0);
+          
+          // Calcular cobertura de vegetación (mismo criterio que getCoveragePercentage)
+          const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
+          const vegetationAreaM2 = filteredPixelCoverageData
+            .filter((item: any) => vegetationClasses.some((vc: string) => 
+              item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
+            ))
+            .reduce((sum: number, item: any) => sum + (item.area_m2 || 0), 0);
+          
+          const vegetationPercentage = filteredTotalAreaM2 > 0 ? (vegetationAreaM2 / filteredTotalAreaM2) * 100 : 0;
+          
+          // Procesar máscaras del período
+          const masks = maskResponse?.masks || [];
+          const multipleMasks = masks.length > 0 
+            ? masks.map((maskData: any) => ({
+                sceneId: `Escena ${masks.indexOf(maskData) + 1}`,
+                captureDate: new Date().toISOString().split('T')[0],
+                imageUrl: maskData.image,
+                pixelCoverageData: pixelCoverageData
+              }))
+            : undefined;
+          
+          return {
+            monthLabel: month.label,
+            pixelCoverageData: pixelCoverageData,
+            filteredPixelCoverageData: filteredPixelCoverageData,
+            vegetationCoveragePercentage: parseFloat(vegetationPercentage.toFixed(2)),
+            vegetationAreaM2: vegetationAreaM2,
+            totalAreaM2: filteredTotalAreaM2,
+            multipleMasks: multipleMasks,
+            isMultipleMasks: masks.length > 0
+          };
+        }).filter((p: any) => p !== null) as PeriodReportData[];
+
+        // Verificar si tenemos datos válidos
+        if (this.multiPeriodReportData.length === 0) {
+          console.warn('No valid data for multiple periods, using current period');
+          this.generateSinglePeriodReport(data);
+          return;
+        }
+
+        // Generar el reporte con múltiples períodos
+        this.generateMultiPeriodReport(data);
+      },
+      error: (err) => {
+        console.error('Error loading multi-period data:', err);
+        // Fallback: generar reporte con datos actuales
+        this.generateSinglePeriodReport(data);
+      }
+    });
+  }
+
+  private generateSinglePeriodReport(data: { format: string; content: string[]; region: string }): void {
     const activeMonthLabel = this.getSelectedMonths()[0]?.label || 'Noviembre 2024';
     const maskImageUrl = this.getCurrentMaskImageUrl();
     
@@ -739,7 +875,6 @@ export class VisualizationSigmaComponent implements OnInit {
       format: data.format as 'pdf' | 'csv',
       content: data.content,
       region: data.region as 'full' | 'subregion' | 'green-only',
-      cells: [],
       monthLabel: activeMonthLabel,
       // Pasar los datos filtrados según los filtros aplicados
       pixelCoverageData: this.pixelCoverageData,
@@ -753,5 +888,28 @@ export class VisualizationSigmaComponent implements OnInit {
       multipleMasks: multipleMasks,
       isMultipleMasks: this.usePixelCoverage && this.multipleMaskImages.length > 0
     });
+  }
+
+  private generateMultiPeriodReport(data: { format: string; content: string[]; region: string }): void {
+    this.reportGenerator.generateReport({
+      format: data.format as 'pdf' | 'csv',
+      content: data.content,
+      region: data.region as 'full' | 'subregion' | 'green-only',
+      // Pasar datos de múltiples períodos
+      multiPeriodData: this.multiPeriodReportData
+    });
+  }
+
+  onDownloadModalSubmit(data: { format: string; content: string[]; region: string }): void {
+    // Detectar si hay múltiples períodos seleccionados
+    const selectedMonths = this.getSelectedMonths();
+    
+    if (selectedMonths.length > 1) {
+      // Cargar datos de todos los períodos y generar reporte multi-período
+      this.loadDataForMultiPeriodReport(data);
+    } else {
+      // Generar reporte de un único período
+      this.generateSinglePeriodReport(data);
+    }
   }
 }
