@@ -162,6 +162,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
 
     // Cargar múltiples máscaras cuando cambia el período o regionId
     if ((changes['periodo'] || changes['regionId']) && this.periodo && this.regionId) {
+      console.log('[LeafletMap] ngOnChanges: periodo or regionId changed, resetting mask centering');
       this.maskCenteredOnce = false;
       this.lastLoadedClasses = '';
       this.lastMultipleMaskClasses = ''; // Reset para que las clases actuales se apliquen
@@ -295,6 +296,12 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         // Centrar en la máscara solo la primera vez
         if (!this.maskCenteredOnce) {
           this.map.fitBounds(bounds, { padding: [50, 50] });
+          // Desplazar la vista hacia arriba después de que fitBounds se complete
+          // Usar 'moveend' en lugar de 'zoomend' porque moveend se dispara siempre
+          this.map.once('moveend', () => {
+            console.log('[LeafletMap] Panning up for masks');
+            this.map.panBy([0, 400], { animate: false });
+          });
           this.maskCenteredOnce = true;
         }
       } else {
@@ -328,6 +335,11 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     if (this.isLoadingMask || !this.regionId || !this.periodo) {
       return;
     }
+
+    console.log('[LeafletMap] loadMasksForPeriod called, maskCenteredOnce =', this.maskCenteredOnce);
+
+    // Resetear el flag para permitir que la máscara se centre de nuevo
+    this.maskCenteredOnce = false;
 
     this.isLoadingMask = true;
 
@@ -389,6 +401,12 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
           if (!this.maskCenteredOnce && allBounds.length > 0) {
             const group = new L.FeatureGroup(this.maskLayers);
             this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
+            // Desplazar la vista hacia arriba después de que fitBounds se complete
+            // Usar 'moveend' en lugar de 'zoomend' porque moveend se dispara siempre
+            this.map.once('moveend', () => {
+              console.log('[LeafletMap] Panning up for masks');
+              this.map.panBy([0, 400], { animate: false });
+            });
             this.maskCenteredOnce = true;
           }
           

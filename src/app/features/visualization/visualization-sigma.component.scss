@@ -466,6 +466,17 @@ app-leaflet-map {
           background-color: #e8e8e8;
         }
       }
+
+      &.btn-delete {
+        background-color: #f0f0f0;
+        color: #d32f2f;
+        border: 1px solid #ddd;
+
+        &:hover {
+          background-color: #d32f2f;
+          color: white;
+        }
+      }
     }
   }
 }

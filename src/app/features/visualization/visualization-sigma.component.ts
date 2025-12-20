@@ -1,11 +1,11 @@
 import { Component, OnInit, signal, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { LeafletMapComponent } from '../components/leaflet-map/leaflet-map.component';
 import { ControlPanelComponent, SceneUploadData } from '../components/control-panel/control-panel.component';
 import { DashboardPanelComponent } from '../components/dashboard/dashboard-panel.component';
 import { VisualizationHeaderComponent } from '../components/header/visualization-header.component';
 import { DownloadModalComponent } from '../components/download-modal/download-modal.component';
+import { ClearDataConfirmationDialogComponent } from '../components/clear-data-confirmation-dialog/clear-data-confirmation-dialog.component';
 import { SegmentationProgressDialogComponent } from '../components/segmentation-progress-dialog/segmentation-progress-dialog.component';
 import { ChartBar, ClassDistributionStat, ClassType, MonthFilter } from '../models/visualization.models';
 import { ReportGeneratorService, PeriodReportData, MaskData } from '../services/report-generator.service';
@@ -21,12 +21,12 @@ import { finalize, forkJoin, of } from 'rxjs';
   standalone: true,
   imports: [
     CommonModule,
-    RouterLink,
     LeafletMapComponent,
     ControlPanelComponent,
     DashboardPanelComponent,
     VisualizationHeaderComponent,
     DownloadModalComponent,
+    ClearDataConfirmationDialogComponent,
     SegmentationProgressDialogComponent
   ],
   templateUrl: './visualization-sigma.component.html',
@@ -71,6 +71,9 @@ export class VisualizationSigmaComponent implements OnInit {
   
   // ===== DATOS DE MÚLTIPLES PERÍODOS PARA REPORTES =====
   multiPeriodReportData: PeriodReportData[] = [];  // Datos para cada período seleccionado en reportes
+
+  // ===== DIÁLOGOS =====
+  showClearDataConfirmation: boolean = false;  // Diálogo de confirmación de borrado
 
   months: MonthFilter[] = [
     { id: '2024-08', label: 'Agosto 2024', selected: false },
@@ -710,6 +713,30 @@ export class VisualizationSigmaComponent implements OnInit {
 
   onDownloadModalClose(): void {
     this.showDownloadModal = false;
+  }
+
+  showClearDataDialog(): void {
+    this.showClearDataConfirmation = true;
+  }
+
+  onClearDataDialogClose(): void {
+    this.showClearDataConfirmation = false;
+  }
+
+  onClearDataConfirm(): void {
+    this.segmentsService.clearAllData().subscribe({
+      next: (response: any) => {
+        console.log('Data cleared successfully:', response);
+        // Recargar el frontend después de 1 segundo para que el usuario vea que se completó
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      },
+      error: (err) => {
+        console.error('Error clearing data:', err);
+        alert('Error al borrar los datos. Por favor, intenta de nuevo.');
+      }
+    });
   }
 
   onMaskLoaded(maskImageUrl: string): void {

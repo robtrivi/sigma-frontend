@@ -69,7 +69,7 @@
           {{ getToolbarInfo() }}
         </div>
         <div class="toolbar-buttons">
-          <button class="btn-secondary" [routerLink]="['/']">Volver al Inicio</button>
+          <button class="btn-delete" (click)="showClearDataDialog()">Borrar Datos</button>
           <button class="btn-secondary" (click)="clearFilters()">Limpiar Filtros</button>
           <button class="btn-primary" (click)="downloadReport()">Descargar Informe</button>
         </div>
@@ -84,6 +84,12 @@
     (close)="onDownloadModalClose()"
     (download)="onDownloadModalSubmit($event)"
   ></app-download-modal>
+
+  <app-clear-data-confirmation-dialog
+    *ngIf="showClearDataConfirmation"
+    (close)="onClearDataDialogClose()"
+    (confirm)="onClearDataConfirm()"
+  ></app-clear-data-confirmation-dialog>
 
   <app-segmentation-progress-dialog
     [isVisible]="showProgressDialog"

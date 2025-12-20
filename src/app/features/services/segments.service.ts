@@ -18,6 +18,7 @@ import {
 export class SegmentsService {
   private readonly baseUrl = `${environment.apiBaseUrl}/api/v1/segments`;
   private readonly regionsUrl = `${environment.apiBaseUrl}/api/v1/regions`;
+  private readonly importsUrl = `${environment.apiBaseUrl}/api/v1/imports`;
 
   constructor(private http: HttpClient) {}
 
@@ -135,4 +136,9 @@ export class SegmentsService {
       { params }
     );
   }
+
+  clearAllData(): Observable<any> {
+    return this.http.delete<any>(`${this.importsUrl}/clear-all-data`);
+  }
 }
+
