@@ -726,7 +726,6 @@ export class VisualizationSigmaComponent implements OnInit {
   onClearDataConfirm(): void {
     this.segmentsService.clearAllData().subscribe({
       next: (response: any) => {
-        console.log('Data cleared successfully:', response);
         // Recargar el frontend después de 1 segundo para que el usuario vea que se completó
         setTimeout(() => {
           window.location.reload();
