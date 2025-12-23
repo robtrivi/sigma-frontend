@@ -100,4 +100,3 @@ export class DownloadModalComponent {
     this.close.emit();
   }
 }
-

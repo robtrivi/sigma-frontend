@@ -69,10 +69,10 @@ export function getClassName(classId: string): string {
  * Agrupa clases por categorías para mejor organización en la UI.
  */
 export const CLASS_CATEGORIES = {
-  superficies: ['paved-area', 'dirt', 'grass', 'gravel', 'rocks'],
+  superficies: ['dirt', 'gravel', 'rocks'],
   agua: ['water', 'pool'],
-  vegetacion: ['vegetation', 'tree', 'bald-tree', 'grass'],
-  construccion: ['roof', 'wall', 'window', 'door', 'fence', 'fence-pole'],
-  objetos: ['person', 'dog', 'car', 'bicycle'],
-  otros: ['ar-marker', 'obstacle', 'conflicting', 'unlabeled']
+  areasVerdes: ['vegetation', 'grass', 'tree', 'bald-tree'],
+  construccion: ['paved-area', 'roof', 'wall', 'window', 'door', 'fence', 'fence-pole'],
+  objetos: ['person', 'dog', 'car', 'bicycle','obstacle'],
+  otros: ['ar-marker', 'conflicting', 'unlabeled']
 };

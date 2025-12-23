@@ -141,4 +141,3 @@ export class SegmentsService {
     return this.http.delete<any>(`${this.importsUrl}/clear-all-data`);
   }
 }
-

@@ -8,13 +8,13 @@ import { DownloadModalComponent } from '../components/download-modal/download-mo
 import { ClearDataConfirmationDialogComponent } from '../components/clear-data-confirmation-dialog/clear-data-confirmation-dialog.component';
 import { SegmentationProgressDialogComponent } from '../components/segmentation-progress-dialog/segmentation-progress-dialog.component';
 import { ChartBar, ClassDistributionStat, ClassType, MonthFilter } from '../models/visualization.models';
-import { ReportGeneratorService, PeriodReportData, MaskData } from '../services/report-generator.service';
+import { ReportGeneratorService, PeriodReportData } from '../services/report-generator.service';
 import { ScenesService } from '../services/scenes.service';
 import { SegmentsService } from '../services/segments.service';
 import { RegionsService } from '../services/regions.service';
 import { SegmentFeature, SceneResponse, Region, PeriodInfo, PixelCoverageItem, SegmentationCoverageResponse } from '../models/api.models';
 import { CLASS_CATALOG, getClassConfig } from '../models/class-catalog';
-import { finalize, forkJoin, of } from 'rxjs';
+import { finalize, forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-visualization-sigma',
@@ -334,15 +334,6 @@ export class VisualizationSigmaComponent implements OnInit {
       this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
       this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
     }
-  }
-
-  private getClassIdStringByIndex(classIndex: number): string {
-    const classIds = [
-      'unlabeled', 'paved-area', 'dirt', 'grass', 'gravel', 'water', 'rocks', 'pool',
-      'vegetation', 'roof', 'wall', 'window', 'door', 'fence', 'fence-pole', 'person',
-      'dog', 'car', 'bicycle', 'tree', 'bald-tree', 'ar-marker', 'obstacle', 'conflicting'
-    ];
-    return classIds[classIndex] || `class_${classIndex}`;
   }
 
   onRunSegmentation(): void {
@@ -808,10 +799,6 @@ export class VisualizationSigmaComponent implements OnInit {
               coverage_percentage: item.coverage_percentage,
               area_m2: item.area_m2 || 0
             }));
-
-          // Recalcular totales sin "unlabeled"
-          const totalPixels = pixelCoverageData.reduce((sum: number, item: any) => sum + item.pixel_count, 0);
-          const totalAreaM2 = pixelCoverageData.reduce((sum: number, item: any) => sum + (item.area_m2 || 0), 0);
           
           // Filtrar según clases seleccionadas (igual que filterPixelCoverageByClass)
           let filteredPixelCoverageData = pixelCoverageData;

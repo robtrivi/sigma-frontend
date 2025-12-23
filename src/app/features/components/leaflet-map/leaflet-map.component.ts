@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as L from 'leaflet';
 import { SegmentFeature } from '../../models/api.models';
-import { getClassColor, CLASS_CATALOG } from '../../models/class-catalog';
+import { CLASS_CATALOG } from '../../models/class-catalog';
 import { environment } from '../../../../environments/environment';
 import proj4 from 'proj4';
 import { SegmentsService } from '../../services/segments.service';
@@ -474,18 +474,6 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     };
     
     return projDefinitions[epsgCode] || null;
-  }
-
-  private _extractUTMZone(epsgCode: number): number {
-    // Extraer zona UTM del código EPSG
-    // Códigos EPSG para UTM van de 32601-32660 para hemisferio norte
-    // y 32701-32760 para hemisferio sur
-    if (epsgCode >= 32601 && epsgCode <= 32660) {
-      return epsgCode - 32600;
-    } else if (epsgCode >= 32701 && epsgCode <= 32760) {
-      return epsgCode - 32700;
-    }
-    return 17; // Zona por defecto (Ecuador)
   }
 
   private fixLeafletIconPaths(): void {

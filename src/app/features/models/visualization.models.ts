@@ -24,4 +24,3 @@ export interface ChartBar {
   height: number;
   gradient: string;
 }
-
