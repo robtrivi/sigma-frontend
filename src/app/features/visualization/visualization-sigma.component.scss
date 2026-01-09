@@ -490,7 +490,8 @@ app-leaflet-map {
 // Responsive
 @media (max-width: 1024px) {
   .sigma-container {
-    padding: 16px;
+    padding: 12px;
+    gap: 12px;
   }
 
   .sigma-main-layout {
@@ -505,10 +506,321 @@ app-leaflet-map {
 
   .content-wrapper {
     flex-direction: column;
+    gap: 20px;
+  }
+
+  app-leaflet-map {
+    min-height: 300px;
   }
 
   app-dashboard-panel {
     width: 100%;
     flex: 1 1 auto;
+  }
+
+  .bottom-toolbar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+
+    .toolbar-buttons {
+      width: 100%;
+      flex-wrap: wrap;
+
+      button {
+        flex: 1;
+        min-width: 120px;
+        padding: 10px 12px;
+        font-size: 12px;
+      }
+    }
+  }
+
+  .tab-container {
+    overflow-x: auto;
+    white-space: nowrap;
+    padding: 8px;
+
+    .tab {
+      padding: 8px 16px;
+      font-size: 12px;
+    }
+  }
+}
+
+// Mobile Large (576px - 767px)
+@media (max-width: 767px) {
+  .sigma-page {
+    min-height: 100vh;
+  }
+
+  .sigma-container {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  app-control-panel {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .sigma-main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .content-wrapper {
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+
+    app-leaflet-map {
+      flex: 1;
+      min-height: 220px;
+    }
+
+    app-dashboard-panel {
+      max-height: 35vh;
+      overflow-y: auto;
+    }
+  }
+
+  .status-bar {
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .tab-container {
+    gap: 4px;
+    padding: 6px;
+
+    .tab {
+      padding: 6px 12px;
+      font-size: 11px;
+    }
+  }
+
+  .bottom-toolbar {
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+
+    .toolbar-info {
+      font-size: 11px;
+      width: 100%;
+    }
+
+    .toolbar-buttons {
+      width: 100%;
+      gap: 6px;
+
+      button {
+        flex: 1;
+        min-width: 100px;
+        padding: 8px 10px;
+        font-size: 11px;
+      }
+    }
+  }
+
+  .sigma-sidebar {
+    padding: 15px;
+
+    h2 {
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+  }
+
+  .section {
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .upload-area {
+    padding: 15px;
+    margin-bottom: 12px;
+
+    .upload-icon {
+      font-size: 24px;
+      margin-bottom: 6px;
+    }
+
+    p {
+      font-size: 12px;
+    }
+
+    .upload-hint {
+      font-size: 10px;
+    }
+  }
+}
+
+// Mobile Small (320px - 575px)
+@media (max-width: 575px) {
+  .sigma-page {
+    min-height: 100vh;
+  }
+
+  .sigma-container {
+    padding: 4px;
+    gap: 4px;
+  }
+
+  app-control-panel {
+    max-height: 45vh;
+    overflow-y: auto;
+  }
+
+  .sigma-main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    padding: 0 4px;
+  }
+
+  .content-wrapper {
+    flex: 1;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+
+    app-leaflet-map {
+      flex: 1;
+      min-height: 200px;
+    }
+
+    app-dashboard-panel {
+      max-height: 30vh;
+      overflow-y: auto;
+    }
+  }
+
+  .status-bar {
+    padding: 6px;
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .tab-container {
+    gap: 2px;
+    padding: 4px;
+    overflow-x: auto;
+    white-space: nowrap;
+
+    .tab {
+      padding: 5px 10px;
+      font-size: 10px;
+      margin-right: 4px;
+
+      i {
+        display: none;
+      }
+    }
+  }
+
+  .bottom-toolbar {
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+
+    .toolbar-info {
+      font-size: 10px;
+      width: 100%;
+      line-height: 1.3;
+    }
+
+    .toolbar-buttons {
+      width: 100%;
+      gap: 4px;
+      flex-direction: column;
+
+      button {
+        width: 100%;
+        padding: 6px 8px;
+        font-size: 10px;
+      }
+    }
+  }
+
+  .sigma-sidebar {
+    padding: 12px;
+
+    h2 {
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+  }
+
+  .section {
+    margin-bottom: 15px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  .upload-area {
+    padding: 12px;
+    margin-bottom: 10px;
+
+    .upload-icon {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    p {
+      font-size: 11px;
+      margin: 6px 0;
+    }
+
+    .upload-hint {
+      font-size: 9px;
+    }
+  }
+
+  // Control Panel adjustments for small screens
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  label {
+    font-size: 11px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 12px;
+    padding: 6px;
+  }
+
+  .p-button {
+    padding: 6px 12px !important;
+    font-size: 11px !important;
+  }
+
+  // Dashboard panel adjustments
+  .dashboard-stat {
+    padding: 8px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+  }
+
+  .stat-value {
+    font-size: 14px;
   }
 }

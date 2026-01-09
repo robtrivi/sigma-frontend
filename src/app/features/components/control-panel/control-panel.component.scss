@@ -432,3 +432,134 @@
     max-height: 320px;
   }
 }
+
+@media (max-width: 767px) {
+  .sigma-sidebar {
+    padding: 15px;
+    max-height: none;
+
+    h2 {
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+  }
+
+  .section {
+    margin-bottom: 18px;
+  }
+
+  .section-title {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .upload-area {
+    padding: 12px;
+    margin-bottom: 10px;
+
+    .upload-icon {
+      font-size: 24px;
+    }
+
+    p {
+      font-size: 12px;
+    }
+  }
+
+  .form-group {
+    margin-bottom: 12px;
+
+    label {
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    input,
+    select {
+      font-size: 12px;
+      padding: 8px;
+    }
+  }
+
+  .info-text {
+    font-size: 11px;
+    padding: 6px;
+    margin-top: 8px;
+  }
+}
+
+@media (max-width: 575px) {
+  .sigma-sidebar {
+    padding: 12px;
+
+    h2 {
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+  }
+
+  .section {
+    margin-bottom: 15px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  .upload-area {
+    padding: 10px;
+    margin-bottom: 8px;
+
+    .upload-icon {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    p {
+      font-size: 11px;
+      margin: 4px 0;
+    }
+
+    .upload-hint {
+      font-size: 9px;
+    }
+  }
+
+  .form-group {
+    margin-bottom: 10px;
+
+    label {
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    input,
+    select,
+    textarea {
+      font-size: 11px;
+      padding: 6px;
+    }
+  }
+
+  .hovered-region {
+    padding: 8px;
+    font-size: 11px;
+    margin-bottom: 10px;
+
+    strong {
+      font-size: 11px;
+    }
+  }
+
+  .info-text {
+    font-size: 10px;
+    padding: 5px;
+    margin-top: 6px;
+  }
+
+  .p-button {
+    padding: 6px 12px !important;
+    font-size: 11px !important;
+  }
+}

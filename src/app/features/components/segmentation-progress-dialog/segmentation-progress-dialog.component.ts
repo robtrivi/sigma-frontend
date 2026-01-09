@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, signal, computed, OnInit, OnDestroy, AfterViewInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { environment } from '../../../../environments/environment';
 
@@ -49,6 +50,8 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
   elapsedSeconds = signal(0);
   private startTime: number = 0;
   private timerInterval: any = null;
+  private pollingInterval: any = null;
+  private pollingIntervalMs = 1000; // Poll every 1 second
 
   progressPercentage = computed(() => {
     const prog = this.progress();
@@ -84,20 +87,19 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
     return prog?.status === 'error';
   });
 
-  private eventSource: EventSource | null = null;
-
-  constructor() {
+  constructor(private http: HttpClient) {
     // Effect para monitorear cambios en el progreso y detener el timer cuando se complete
     effect(() => {
       const prog = this.progress();
       if (prog && (prog.status === 'completed' || prog.status === 'error')) {
+        this.stopPolling();
         this.stopTimer();
       }
     });
   }
 
   ngOnInit(): void {
-    // Watch for visibility changes to connect/disconnect SSE
+    // Watch for visibility changes to connect/disconnect polling
   }
 
   ngAfterViewInit(): void {
@@ -105,50 +107,52 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
   }
 
   ngOnDestroy(): void {
-    this.disconnectSSE();
+    this.stopPolling();
   }
 
-  private connectSSE(): void {
+  private startPolling(): void {
     if (!this.sceneId()) return;
 
-    // Close any existing connection
-    this.disconnectSSE();
+    // Stop any existing polling
+    this.stopPolling();
 
-    const eventSourceUrl = `${environment.apiBaseUrl}/api/v1/imports/progress/${this.sceneId()}`;
-    
-    try {
-      this.eventSource = new EventSource(eventSourceUrl);
+    // Initial fetch
+    this.fetchProgress();
 
-      this.eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data) as SegmentationProgress;
-          this.progress.set(data);
-        } catch (e) {
-          console.error('Error parsing SSE message:', e);
-        }
-      };
-
-      this.eventSource.onerror = (error) => {
-        console.error('SSE error:', error);
-        if (this.eventSource?.readyState === EventSource.CLOSED) {
-          this.disconnectSSE();
-        }
-      };
-    } catch (error) {
-      console.error('Error connecting to SSE:', error);
-    }
+    // Then poll regularly
+    this.pollingInterval = setInterval(() => {
+      this.fetchProgress();
+    }, this.pollingIntervalMs);
   }
 
-  private disconnectSSE(): void {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
+  private fetchProgress(): void {
+    const sceneId = this.sceneId();
+    if (!sceneId) return;
+
+    const progressUrl = `${environment.apiBaseUrl}/api/v1/imports/progress/${sceneId}`;
+    
+    this.http.get<SegmentationProgress>(progressUrl).subscribe({
+      next: (data) => {
+        console.log('[Progress] Fetched:', data);
+        this.progress.set(data);
+      },
+      error: (error) => {
+        console.error('Error fetching progress:', error);
+        // Don't stop polling on error - server might be temporarily unavailable
+      }
+    });
+  }
+
+  private stopPolling(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
     }
   }
 
   close(): void {
     this.stopTimer();
-    this.disconnectSSE();
+    this.stopPolling();
     this.progress.set(null);
     this.onClose.emit();
     
@@ -209,6 +213,6 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
     this.progress.set(null);
     this.elapsedSeconds.set(0);
     this.startTimer();
-    this.connectSSE();
+    this.startPolling();
   }
 }

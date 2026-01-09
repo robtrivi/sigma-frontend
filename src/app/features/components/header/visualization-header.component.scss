@@ -77,3 +77,123 @@
     font-size: 24px;
   }
 }
+
+@media (max-width: 1024px) {
+  .sigma-hero {
+    padding: 16px 20px;
+    border-radius: 0 0 10px 10px;
+  }
+
+  .sigma-hero__heading {
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .sigma-hero__logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .sigma-hero__logo svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .sigma-hero h1 {
+    font-size: 22px;
+    margin-top: 0;
+  }
+
+  .sigma-hero__subtitle {
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+
+  .sigma-hero__description {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 767px) {
+  .sigma-hero {
+    padding: 14px 16px;
+    border-radius: 0 0 8px 8px;
+  }
+
+  .sigma-hero__heading {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .sigma-hero__logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+  }
+
+  .sigma-hero__logo svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .sigma-hero__badge {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+
+  .sigma-hero h1 {
+    font-size: 18px;
+  }
+
+  .sigma-hero__subtitle {
+    font-size: 11px;
+  }
+
+  .sigma-hero__description {
+    font-size: 11px;
+    opacity: 0.7;
+  }
+}
+
+@media (max-width: 575px) {
+  .sigma-hero {
+    padding: 12px 14px;
+    border-radius: 0 0 6px 6px;
+  }
+
+  .sigma-hero__heading {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .sigma-hero__logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+  }
+
+  .sigma-hero__logo svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sigma-hero__badge {
+    font-size: 8px;
+    letter-spacing: 0.04em;
+  }
+
+  .sigma-hero h1 {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .sigma-hero__subtitle {
+    font-size: 10px;
+    margin-bottom: 2px;
+  }
+
+  .sigma-hero__description {
+    font-size: 10px;
+    opacity: 0.65;
+  }
+}

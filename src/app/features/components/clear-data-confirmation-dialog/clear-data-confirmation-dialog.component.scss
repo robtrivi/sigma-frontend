@@ -133,3 +133,177 @@
     }
   }
 }
+
+// Responsive Design
+@media (max-width: 1024px) {
+  .modal-content {
+    max-width: 380px;
+    width: 90%;
+  }
+
+  .modal-header {
+    padding: 18px;
+
+    h2 {
+      font-size: 16px;
+    }
+
+    .close-btn {
+      width: 28px;
+      height: 28px;
+      font-size: 22px;
+    }
+  }
+
+  .modal-body {
+    padding: 25px 18px;
+
+    .warning-icon i {
+      font-size: 40px;
+    }
+
+    .warning-message {
+      font-size: 15px;
+    }
+
+    .warning-subtext {
+      font-size: 13px;
+    }
+  }
+
+  .modal-footer {
+    padding: 16px 18px;
+    gap: 8px;
+
+    button {
+      padding: 8px 16px;
+      font-size: 13px;
+
+      i {
+        font-size: 14px;
+      }
+    }
+  }
+}
+
+@media (max-width: 767px) {
+  .modal-content {
+    max-width: none;
+    width: 95%;
+    border-radius: 6px;
+  }
+
+  .modal-header {
+    padding: 16px;
+
+    h2 {
+      font-size: 15px;
+    }
+
+    .close-btn {
+      width: 24px;
+      height: 24px;
+      font-size: 20px;
+    }
+  }
+
+  .modal-body {
+    padding: 20px 16px;
+
+    .warning-icon {
+      margin-bottom: 12px;
+
+      i {
+        font-size: 36px;
+      }
+    }
+
+    .warning-message {
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .warning-subtext {
+      font-size: 12px;
+    }
+  }
+
+  .modal-footer {
+    padding: 14px 16px;
+    flex-direction: column-reverse;
+    gap: 8px;
+    border-radius: 0 0 6px 6px;
+
+    button {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 12px;
+      justify-content: center;
+
+      i {
+        font-size: 13px;
+      }
+    }
+  }
+}
+
+@media (max-width: 575px) {
+  .modal-content {
+    width: 98%;
+    border-radius: 4px;
+  }
+
+  .modal-header {
+    padding: 12px;
+
+    h2 {
+      font-size: 13px;
+    }
+
+    .close-btn {
+      width: 20px;
+      height: 20px;
+      font-size: 18px;
+    }
+  }
+
+  .modal-body {
+    padding: 16px 12px;
+
+    .warning-icon {
+      margin-bottom: 10px;
+
+      i {
+        font-size: 32px;
+      }
+    }
+
+    .warning-message {
+      font-size: 12px;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .warning-subtext {
+      font-size: 11px;
+    }
+  }
+
+  .modal-footer {
+    padding: 12px;
+    flex-direction: column-reverse;
+    gap: 6px;
+    border-radius: 0 0 4px 4px;
+
+    button {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 11px;
+      gap: 6px;
+
+      i {
+        font-size: 12px;
+      }
+    }
+  }
+}
