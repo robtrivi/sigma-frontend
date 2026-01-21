@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, OnInit, signal, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LeafletMapComponent } from '../components/leaflet-map/leaflet-map.component';
 import { ControlPanelComponent, SceneUploadData } from '../components/control-panel/control-panel.component';
@@ -81,6 +81,10 @@ export class VisualizationSigmaComponent implements OnInit {
   // ===== UNIDADES DE ÁREA =====
   selectedAreaUnit: 'm2' | 'ha' = 'm2';  // Unidad de área seleccionada en el dashboard
 
+  // ===== VISTA DE COBERTURA =====
+  coverageViewMode = signal<'classes' | 'categories'>('classes');  // Modo de vista: clases o categorías
+  selectedCategoryIds: string[] = [];  // Categorías seleccionadas en el panel de control
+
   // ===== DIÁLOGOS =====
   showClearDataConfirmation: boolean = false;  // Diálogo de confirmación de borrado
   showMaskLoadingDialog = signal(false);  // Diálogo de carga de máscaras
@@ -118,7 +122,8 @@ export class VisualizationSigmaComponent implements OnInit {
     private scenesService: ScenesService,
     private segmentsService: SegmentsService,
     private regionsService: RegionsService,
-    private classColorService: ClassColorService
+    private classColorService: ClassColorService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -341,27 +346,84 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   private filterPixelCoverageByClass(): void {
+    let filtered: PixelCoverageItem[];
+    
     if (this.classTypes.filter(c => c.selected).length === 0) {
       // Si no hay clases seleccionadas, mostrar todas excepto "unlabeled"
-      this.filteredPixelCoverageData = [...this.pixelCoverageData]
+      filtered = this.pixelCoverageData
         .filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
-      this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
     } else {
       // Filtrar por clases seleccionadas
       const selectedLabels = this.classTypes
         .filter(c => c.selected)
         .map(c => c.label.toLowerCase());
       
-      this.filteredPixelCoverageData = this.pixelCoverageData.filter(item => {
+      filtered = this.pixelCoverageData.filter(item => {
         const itemClassName = item.class_name?.toLowerCase() || '';
         return selectedLabels.some(label => itemClassName.includes(label));
       });
-      
-      // Calcular total de píxeles filtrados y área filtrada
-      this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
     }
+    
+    // Asegurar que es una nueva referencia para triggear change detection
+    this.filteredPixelCoverageData = [...filtered];
+    
+    // Calcular totales
+    this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
+    this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+    
+    // Forzar detección de cambios para que Angular detecte el cambio en el binding
+    this.cdr.detectChanges();
+  }
+
+  // Manejar cambio de modo de vista de cobertura (clases vs categorías)
+  onCoverageModeChanged(mode: 'classes' | 'categories'): void {
+    this.coverageViewMode.set(mode);
+    
+    if (mode === 'categories') {
+      // Deseleccionar todas las clases
+      this.classTypes.forEach(classType => classType.selected = false);
+      // Deseleccionar todas las categorías para mostrar todas por defecto
+      this.selectedCategoryIds = [];
+      
+      // NO modificar colores de clases. Los colores de categorías se manejan por separado
+      // en el dashboard y no afectan los colores de clases individuales
+      
+      // Recargar segmentos sin filtros para mostrar todas las categorías
+      if (this.selectedRegionId && this.selectedPeriodo) {
+        this.loadSegmentsTiles();
+        
+        // Forzar a Leaflet a recargar máscaras después de detectar el cambio de clases
+        // Hacemos esto en un setTimeout para asegurar que Angular detect changes primero
+        setTimeout(() => {
+          if (this.leafletMap) {
+            // Limpiar el estado de caché de clases para forzar recarga
+            this.leafletMap['lastMultipleMaskClasses'] = null;
+            // Llamar directamente a loadMasksForPeriod
+            this.leafletMap['loadMasksForPeriod']?.();
+          }
+        }, 100);
+      }
+    } else {
+      // Cuando se cambia back a 'classes', no hacer nada con los colores
+      // Ya están guardados en localStorage y cargados en el servicio
+      
+      // Recargar segmentos con colores de clase originales
+      if (this.selectedRegionId && this.selectedPeriodo) {
+        this.loadSegmentsTiles();
+        
+        // Forzar a Leaflet a recargar máscaras
+        setTimeout(() => {
+          if (this.leafletMap) {
+            this.leafletMap['lastMultipleMaskClasses'] = null;
+            this.leafletMap['loadMasksForPeriod']?.();
+          }
+        }, 100);
+      }
+    }
+  }
+
+  onSelectedCategoriesChange(categoryIds: string[]): void {
+    this.selectedCategoryIds = categoryIds;
   }
 
   onRunSegmentation(): void {
@@ -476,7 +538,14 @@ export class VisualizationSigmaComponent implements OnInit {
       if (!currentActiveMonth?.selected) {
         this.activeMonth = selectedMonths[0].id;
       }
+      // Si hay solo 1 período seleccionado, asegurar que sea el activo
+      if (selectedMonths.length === 1 && this.activeMonth !== selectedMonths[0].id) {
+        this.activeMonth = selectedMonths[0].id;
+      }
       this.selectedPeriodo = this.activeMonth;
+      
+      // Resetear la escena actual cuando cambia el período desde el filtro temporal
+      this.currentScene = null;
       
       if (this.selectedRegionId) {
         this.loadSegmentsTiles();
@@ -508,6 +577,9 @@ export class VisualizationSigmaComponent implements OnInit {
   setActiveMonth(monthId: string): void {
     this.activeMonth = monthId;
     this.selectedPeriodo = monthId;
+    
+    // Resetear la escena actual cuando cambia el período
+    this.currentScene = null;
     
     if (this.selectedRegionId) {
       // Mostrar el diálogo de carga
@@ -882,6 +954,7 @@ export class VisualizationSigmaComponent implements OnInit {
           
           return {
             monthLabel: month.label,
+            periodo: month.id,  // Guardar el período en formato YYYY-MM
             pixelCoverageData: pixelCoverageData,
             filteredPixelCoverageData: filteredPixelCoverageData,
             vegetationCoveragePercentage: parseFloat(vegetationPercentage.toFixed(2)),
@@ -892,15 +965,18 @@ export class VisualizationSigmaComponent implements OnInit {
           };
         }).filter((p: any) => p !== null) as PeriodReportData[];
 
-        // Verificar si tenemos datos válidos
-        if (this.multiPeriodReportData.length === 0) {
-          console.warn('No valid data for multiple periods, using current period');
-          this.generateSinglePeriodReport(data);
-          return;
-        }
-
-        // Generar el reporte con múltiples períodos
-        this.generateMultiPeriodReport(data);
+        // Eliminar fondo negro de todas las máscaras
+        this.removeBlackBackgroundFromAllMasks(() => {
+          // Verificar si tenemos datos válidos
+          if (this.multiPeriodReportData.length === 0) {
+            console.warn('No valid data for multiple periods, using current period');
+            this.generateSinglePeriodReport(data);
+            return;
+          }
+          
+          // Generar el reporte con múltiples períodos
+          this.generateMultiPeriodReport(data);
+        });
       },
       error: (err) => {
         console.error('Error loading multi-period data:', err);
@@ -924,37 +1000,134 @@ export class VisualizationSigmaComponent implements OnInit {
         }))
       : undefined;
     
-    this.reportGenerator.generateReport({
-      format: data.format as 'pdf' | 'csv',
-      content: data.content,
-      region: data.region as 'full' | 'subregion' | 'green-only',
-      monthLabel: activeMonthLabel,
-      // Pasar los datos filtrados según los filtros aplicados
-      pixelCoverageData: this.pixelCoverageData,
-      filteredPixelCoverageData: this.filteredPixelCoverageData,
-      vegetationCoveragePercentage: this.getCoveragePercentage(),
-      vegetationAreaM2: this.getCoverageAreaM2(),
-      totalAreaM2: this.filteredTotalAreaM2,
-      // Pasar la URL de la máscara actual del Leaflet
-      maskImageUrl: maskImageUrl,
-      // Pasar máscaras múltiples si existen
-      multipleMasks: multipleMasks,
-      isMultipleMasks: this.usePixelCoverage && this.multipleMaskImages.length > 0,
-      // Pasar la unidad de área seleccionada
-      areaUnit: this.selectedAreaUnit
-    });
+    // Si hay múltiples máscaras, regenerarlas con los colores personalizados o eliminar fondo negro
+    if (multipleMasks && multipleMasks.length > 0) {
+      const customColors = this.classColorService.getAllColors();
+      if (customColors && customColors.size > 0) {
+        // Si hay colores personalizados, regenerar máscaras
+        this.regenerateMasksWithCustomColors(multipleMasks, () => {
+          this.reportGenerator.generateReport({
+            format: data.format as 'pdf' | 'csv',
+            content: data.content,
+            region: data.region as 'full' | 'subregion' | 'green-only',
+            monthLabel: activeMonthLabel,
+            // Pasar los datos filtrados según los filtros aplicados
+            pixelCoverageData: this.pixelCoverageData,
+            filteredPixelCoverageData: this.filteredPixelCoverageData,
+            vegetationCoveragePercentage: this.getCoveragePercentage(),
+            vegetationAreaM2: this.getCoverageAreaM2(),
+            totalAreaM2: this.filteredTotalAreaM2,
+            // Pasar la URL de la máscara actual del Leaflet
+            maskImageUrl: maskImageUrl,
+            // Pasar máscaras múltiples con colores regenerados
+            multipleMasks: multipleMasks,
+            isMultipleMasks: this.usePixelCoverage && this.multipleMaskImages.length > 0,
+            // Pasar la unidad de área seleccionada
+            areaUnit: this.selectedAreaUnit,
+            // Pasar el modo de visualización
+            coverageViewMode: this.coverageViewMode(),
+            // Pasar las categorías seleccionadas
+            selectedCategoryIds: this.selectedCategoryIds,
+            // Pasar los colores personalizados de categorías
+            categoryColors: this.classColorService.getAllCategoryColors()
+          });
+        });
+      } else {
+        // Sin colores personalizados, solo eliminar fondo negro
+        this.removeBlackBackgroundFromMasks(multipleMasks, () => {
+          this.reportGenerator.generateReport({
+            format: data.format as 'pdf' | 'csv',
+            content: data.content,
+            region: data.region as 'full' | 'subregion' | 'green-only',
+            monthLabel: activeMonthLabel,
+            // Pasar los datos filtrados según los filtros aplicados
+            pixelCoverageData: this.pixelCoverageData,
+            filteredPixelCoverageData: this.filteredPixelCoverageData,
+            vegetationCoveragePercentage: this.getCoveragePercentage(),
+            vegetationAreaM2: this.getCoverageAreaM2(),
+            totalAreaM2: this.filteredTotalAreaM2,
+            // Pasar la URL de la máscara actual del Leaflet
+            maskImageUrl: maskImageUrl,
+            // Pasar máscaras múltiples con fondo negro eliminado
+            multipleMasks: multipleMasks,
+            isMultipleMasks: this.usePixelCoverage && this.multipleMaskImages.length > 0,
+            // Pasar la unidad de área seleccionada
+            areaUnit: this.selectedAreaUnit,
+            // Pasar el modo de visualización
+            coverageViewMode: this.coverageViewMode(),
+            // Pasar las categorías seleccionadas
+            selectedCategoryIds: this.selectedCategoryIds,
+            // Pasar los colores personalizados de categorías
+            categoryColors: this.classColorService.getAllCategoryColors()
+          });
+        });
+      }
+    } else {
+      this.reportGenerator.generateReport({
+        format: data.format as 'pdf' | 'csv',
+        content: data.content,
+        region: data.region as 'full' | 'subregion' | 'green-only',
+        monthLabel: activeMonthLabel,
+        // Pasar los datos filtrados según los filtros aplicados
+        pixelCoverageData: this.pixelCoverageData,
+        filteredPixelCoverageData: this.filteredPixelCoverageData,
+        vegetationCoveragePercentage: this.getCoveragePercentage(),
+        vegetationAreaM2: this.getCoverageAreaM2(),
+        totalAreaM2: this.filteredTotalAreaM2,
+        // Pasar la URL de la máscara actual del Leaflet
+        maskImageUrl: maskImageUrl,
+        // Pasar máscaras múltiples si existen
+        multipleMasks: multipleMasks,
+        isMultipleMasks: this.usePixelCoverage && this.multipleMaskImages.length > 0,
+        // Pasar la unidad de área seleccionada
+        areaUnit: this.selectedAreaUnit,
+        // Pasar el modo de visualización
+        coverageViewMode: this.coverageViewMode(),
+        // Pasar las categorías seleccionadas
+        selectedCategoryIds: this.selectedCategoryIds,
+        // Pasar los colores personalizados de categorías
+        categoryColors: this.classColorService.getAllCategoryColors()
+      });
+    }
   }
 
   private generateMultiPeriodReport(data: { format: string; content: string[]; region: string }): void {
-    this.reportGenerator.generateReport({
-      format: data.format as 'pdf' | 'csv',
-      content: data.content,
-      region: data.region as 'full' | 'subregion' | 'green-only',
-      // Pasar datos de múltiples períodos
-      multiPeriodData: this.multiPeriodReportData,
-      // Pasar la unidad de área seleccionada
-      areaUnit: this.selectedAreaUnit
-    });
+    if (this.multiPeriodReportData && this.multiPeriodReportData.length > 0) {
+      // Regenerar máscaras de múltiples períodos con los colores correctos según el modo de vista
+      this.regenerateMultiPeriodMasks(() => {
+        this.reportGenerator.generateReport({
+          format: data.format as 'pdf' | 'csv',
+          content: data.content,
+          region: data.region as 'full' | 'subregion' | 'green-only',
+          // Pasar datos de múltiples períodos con máscaras regeneradas
+          multiPeriodData: this.multiPeriodReportData,
+          // Pasar la unidad de área seleccionada
+          areaUnit: this.selectedAreaUnit,
+          // Pasar el modo de visualización
+          coverageViewMode: this.coverageViewMode(),
+          // Pasar las categorías seleccionadas
+          selectedCategoryIds: this.selectedCategoryIds,
+          // Pasar los colores personalizados de categorías
+          categoryColors: this.classColorService.getAllCategoryColors()
+        });
+      });
+    } else {
+      this.reportGenerator.generateReport({
+        format: data.format as 'pdf' | 'csv',
+        content: data.content,
+        region: data.region as 'full' | 'subregion' | 'green-only',
+        // Pasar datos de múltiples períodos
+        multiPeriodData: this.multiPeriodReportData,
+        // Pasar la unidad de área seleccionada
+        areaUnit: this.selectedAreaUnit,
+        // Pasar el modo de visualización
+        coverageViewMode: this.coverageViewMode(),
+        // Pasar las categorías seleccionadas
+        selectedCategoryIds: this.selectedCategoryIds,
+        // Pasar los colores personalizados de categorías
+        categoryColors: this.classColorService.getAllCategoryColors()
+      });
+    }
   }
 
   onDownloadModalSubmit(data: { format: string; content: string[]; region: string }): void {
@@ -998,6 +1171,104 @@ export class VisualizationSigmaComponent implements OnInit {
     setTimeout(() => {
       this.showVisualizationLoadingDialog.set(false);
     }, 10000);
+  }
+
+  private removeBlackBackgroundFromMasks(multipleMasks: any[], callback: () => void): void {
+    // Ya no es necesario eliminar fondo negro en el frontend, 
+    // el backend ya lo hace directamente en la máscara
+    callback();
+  }
+
+  private removeBlackBackgroundFromAllMasks(callback: () => void): void {
+    // Ya no es necesario eliminar fondo negro en el frontend, 
+    // el backend ya lo hace directamente en la máscara
+    callback();
+  }
+
+  private regenerateMasksWithCustomColors(multipleMasks: any[], callback: () => void): void {
+    // Obtener los colores correctos según el modo de vista
+    const customColors = this.classColorService.getColorsForRendering(this.coverageViewMode());
+    
+    if (!customColors || customColors.size === 0) {
+      callback();
+      return;
+    }
+    
+    const masksToRegenerate = multipleMasks.map((maskData: any, index: number) => {
+      const metadata = this.multipleMaskMetadata[index];
+      if (!metadata) {
+        return null;
+      }
+      
+      return this.segmentsService.getMasksForPeriod(
+        this.selectedRegionId,
+        metadata.periodo || this.selectedPeriodo,
+        undefined,
+        customColors,
+        true  // makeUnlabeledTransparent: true para reportes PDF
+      ).toPromise().then((response: any) => {
+        if (response && response.masks && response.masks.length > 0) {
+          let imageUrl = response.masks[0].image || response.masks[0];
+          maskData.imageUrl = imageUrl;
+          return maskData;
+        }
+        return maskData;
+      }).catch((err: any) => {
+        console.error('Error regenerating mask:', err);
+        return maskData;
+      });
+    }).filter((m: any) => m !== null);
+    
+    if (masksToRegenerate.length > 0) {
+      Promise.all(masksToRegenerate).then(() => {
+        callback();
+      });
+    } else {
+      callback();
+    }
+  }
+
+  private regenerateMultiPeriodMasks(callback: () => void): void {
+    // Obtener los colores correctos según el modo de vista
+    const customColors = this.classColorService.getColorsForRendering(this.coverageViewMode());
+    
+    const periodPromises = this.multiPeriodReportData.map((periodData: any) => {
+      if (!periodData.multipleMasks || periodData.multipleMasks.length === 0) {
+        return Promise.resolve(periodData);
+      }
+      
+      const periodo = periodData.periodo || this.selectedPeriodo;
+      
+      const maskPromises = periodData.multipleMasks.map((maskData: any, index: number) => {
+        return this.segmentsService.getMasksForPeriod(
+          this.selectedRegionId,
+          periodo,
+          undefined,
+          customColors,
+          true  // makeUnlabeledTransparent: true para reportes PDF
+        ).toPromise().then((response: any) => {
+          if (response && response.masks && response.masks.length > index) {
+            let imageUrl = response.masks[index].image || response.masks[index];
+            maskData.imageUrl = imageUrl;
+            return maskData;
+          }
+          return maskData;
+        }).catch((err: any) => {
+          console.error('Error regenerating mask for period:', err);
+          return maskData;
+        });
+      });
+      
+      return Promise.all(maskPromises).then((regeneratedMasks: any) => {
+        periodData.multipleMasks = regeneratedMasks;
+        return periodData;
+      });
+    });
+    
+    Promise.all(periodPromises).then((regeneratedPeriods: any) => {
+      this.multiPeriodReportData = regeneratedPeriods;
+      callback();
+    });
   }
 
   onClassColorChanged(event: { className: string; color: string }): void {

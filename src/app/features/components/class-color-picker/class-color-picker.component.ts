@@ -10,9 +10,9 @@ import { FormsModule } from '@angular/forms';
   styleUrls: ['./class-color-picker.component.scss']
 })
 export class ClassColorPickerComponent implements OnInit {
-  @Input() className: string = '';
+  @Input() className: string = '';  // Puede ser nombre de clase o categoría
   @Input() currentColor: string = '#000000';
-  @Input() originalClassColors: { className: string; color: string }[] = []; // Colores originales de otras clases
+  @Input() originalClassColors: { className: string; color: string }[] = []; // Colores originales de otras clases o categorías
   @Output() colorSelected = new EventEmitter<string>();
   @Output() close = new EventEmitter<void>();
 
@@ -27,10 +27,13 @@ export class ClassColorPickerComponent implements OnInit {
     this.close.emit();
   }
 
+  onNativeColorChange(): void {
+    // Solo actualiza la vista previa, no emite nada
+    // El color solo se aplica al hacer clic en "Confirmar"
+  }
+
   selectGenericColor(color: string): void {
     this.selectedColor = color;
-    this.colorSelected.emit(color);
-    this.close.emit();
   }
 
   onClose(): void {

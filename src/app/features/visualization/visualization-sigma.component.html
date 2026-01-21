@@ -10,10 +10,12 @@
         [classTypes]="classTypes"
         [isLoading]="isLoading()"
         [canRunSegmentation]="canRunSegmentation"
+        [coverageViewMode]="coverageViewMode()"
         (sceneUpload)="onSceneUpload($event)"
         (runSegmentation)="onRunSegmentation()"
         (monthFilterChange)="onMonthFilterChange()"
         (classFilterChange)="onClassFilterChange()"
+        (selectedCategoriesChange)="onSelectedCategoriesChange($event)"
       ></app-control-panel>
 
       <main class="sigma-main-content">
@@ -40,6 +42,7 @@
           [periodo]="selectedPeriodo"
           [selectedClassIds]="getSelectedClassIds()"
           [visualizationType]="visualizationType()"
+          [coverageViewMode]="coverageViewMode()"
           (featureClick)="onFeatureClick($event)"
           (multipeMasksLoaded)="onMultipleMasksLoaded($event)"
           (maskLoaded)="onMaskLoaded($event)"
@@ -62,9 +65,11 @@
           [pixelCoverageDataInput]="filteredPixelCoverageData"
           [totalPixelsInput]="filteredTotalPixels"
           [totalAreaM2Input]="filteredTotalAreaM2"
+          [selectedCategoryIds]="selectedCategoryIds"
           (areaUnitChanged)="onAreaUnitChanged($event)"
           (visualizationTypeChanged)="onVisualizationTypeChanged($event)"
           (classColorChanged)="onClassColorChanged($event)"
+          (coverageModeChanged)="onCoverageModeChanged($event)"
         ></app-dashboard-panel>
       </div>
 

@@ -263,6 +263,101 @@
   }
 }
 
+.coverage-view-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  justify-content: center;
+
+  .toggle-btn {
+    background-color: #f0f0f0;
+    border: 2px solid #d0d0d0;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    &:hover {
+      background-color: #e8e8e8;
+      border-color: #b0b0b0;
+    }
+
+    &.active {
+      background-color: #4a7c2c;
+      border-color: #2d5016;
+      color: white;
+    }
+
+    i {
+      font-size: 10px;
+    }
+  }
+}
+
+// Estilos para categorías
+.category-details {
+  background-color: #fafafa;
+  
+  .category-classes {
+    padding: 8px 0;
+  }
+
+  .category-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    background-color: #f0f0f0;
+    border-left: 4px solid #2d5016;
+    margin-bottom: 6px;
+    font-weight: 600;
+    font-size: 11px;
+    color: #1a1a1a;
+
+    i {
+      margin-right: 6px;
+      font-size: 10px;
+    }
+
+    .category-title {
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  }
+
+  .class-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    font-size: 10px;
+    border-left: 3px solid #e0e0e0;
+    margin-bottom: 2px;
+    margin-left: 12px;
+
+    .indent {
+      display: inline-block;
+      width: 16px;
+    }
+
+    .detail-label {
+      font-weight: 500;
+      min-width: 80px;
+    }
+
+    .detail-value {
+      text-align: right;
+      flex: 1;
+      color: #666;
+    }
+  }
+}
+
 .color-box {
   width: 24px;
   height: 24px;
@@ -312,6 +407,25 @@
     th,
     td {
       padding: 6px 4px !important;
+    }
+
+    .category-header {
+      font-size: 10px !important;
+      padding: 5px 6px !important;
+
+      i {
+        font-size: 9px !important;
+      }
+    }
+
+    .class-detail-row {
+      font-size: 9px !important;
+      padding: 3px 6px !important;
+      margin-left: 10px;
+
+      .detail-label {
+        min-width: 70px;
+      }
     }
   }
 
@@ -377,6 +491,25 @@
 
     tbody td {
       padding: 5px 3px !important;
+    }
+
+    .category-header {
+      font-size: 9px !important;
+      padding: 5px 6px !important;
+
+      i {
+        font-size: 8px !important;
+      }
+    }
+
+    .class-detail-row {
+      font-size: 8px !important;
+      padding: 3px 6px !important;
+      margin-left: 10px;
+
+      .detail-label {
+        min-width: 60px;
+      }
     }
   }
 
@@ -459,6 +592,60 @@
     tbody td {
       padding: 4px 2px !important;
     }
+
+    .category-header {
+      font-size: 8px !important;
+      padding: 4px 6px !important;
+      background-color: #f0f0f0;
+      border-left: 3px solid #2d5016;
+      margin-bottom: 4px;
+
+      i {
+        font-size: 7px !important;
+        margin-right: 4px;
+      }
+
+      .category-title {
+        font-size: 8px !important;
+      }
+    }
+
+    .class-detail-row {
+      font-size: 7px !important;
+      padding: 3px 6px !important;
+      border-left: 2px solid #e0e0e0;
+      margin-left: 10px;
+      margin-bottom: 1px;
+
+      .indent {
+        width: 12px;
+      }
+
+      .detail-label {
+        min-width: 60px;
+      }
+
+      .detail-value {
+        font-size: 7px !important;
+      }
+    }
+  }
+
+  // Botones para cambiar vista
+  .coverage-view-toggle {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+    justify-content: center;
+
+    .toggle-btn {
+      padding: 5px 10px;
+      font-size: 9px;
+
+      i {
+        font-size: 8px;
+      }
+    }
   }
 
   .color-box {
@@ -476,3 +663,4 @@
     font-size: 10px;
   }
 }
+

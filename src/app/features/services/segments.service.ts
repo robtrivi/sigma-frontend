@@ -99,8 +99,13 @@ export class SegmentsService {
     );
   }
 
-  getMasksForPeriod(regionId: string, periodo: string, selectedClassIds?: string[], customColors?: Map<string, string>): Observable<any> {
+  getMasksForPeriod(regionId: string, periodo: string, selectedClassIds?: string[], customColors?: Map<string, string>, makeUnlabeledTransparent: boolean = false): Observable<any> {
     let params = new HttpParams().set('periodo', periodo);
+    
+    // Pasar si se debe hacer transparente "Sin etiqueta"
+    if (makeUnlabeledTransparent) {
+      params = params.set('makeUnlabeledTransparent', 'true');
+    }
     
     // Pasar clases seleccionadas si existen
     if (selectedClassIds && selectedClassIds.length > 0) {

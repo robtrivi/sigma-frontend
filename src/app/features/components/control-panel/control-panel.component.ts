@@ -1,10 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output, OnInit } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClassType, MonthFilter } from '../../models/visualization.models';
 import { SegmentFeature, Region } from '../../models/api.models';
 import { RegionsService } from '../../services/regions.service';
 import { TiffValidationService, TiffValidationResult } from '../../services/tiff-validation.service';
+import { COVERAGE_CATEGORIES } from '../../models/coverage-categories';
 
 export interface SceneUploadData {
   file: File;
@@ -14,6 +15,13 @@ export interface SceneUploadData {
   regionId: string;
 }
 
+export interface SelectableCategory {
+  id: string;
+  name: string;
+  selected: boolean;
+  color: string;
+}
+
 @Component({
   selector: 'app-control-panel',
   standalone: true,
@@ -21,18 +29,20 @@ export interface SceneUploadData {
   templateUrl: './control-panel.component.html',
   styleUrls: ['./control-panel.component.scss']
 })
-export class ControlPanelComponent implements OnInit {
+export class ControlPanelComponent implements OnInit, OnChanges {
   @Input({ required: true }) uploadedFile: string = '';
   @Input({ required: true }) hoveredFeature: SegmentFeature | null = null;
   @Input({ required: true }) months: MonthFilter[] = [];
   @Input({ required: true }) classTypes: ClassType[] = [];
   @Input() isLoading: boolean = false;
   @Input() canRunSegmentation: boolean = false;
+  @Input() coverageViewMode: 'classes' | 'categories' = 'classes'; // Nueva entrada
 
   @Output() sceneUpload = new EventEmitter<SceneUploadData>();
   @Output() runSegmentation = new EventEmitter<void>();
   @Output() monthFilterChange = new EventEmitter<void>();
   @Output() classFilterChange = new EventEmitter<void>();
+  @Output() selectedCategoriesChange = new EventEmitter<string[]>();
 
   selectedFile: File | null = null;
   captureDate: string = '';
@@ -49,6 +59,9 @@ export class ControlPanelComponent implements OnInit {
   tiffValidationError: string | null = null;
   showTiffInfo: boolean = false;
 
+  // Categorías para modo de cobertura por categorías
+  selectableCategories: SelectableCategory[] = [];
+
   constructor(
     private regionsService: RegionsService,
     private tiffValidationService: TiffValidationService
@@ -56,6 +69,27 @@ export class ControlPanelComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadRegions();
+    this.initializeCategories();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // Cuando cambia el modo de cobertura a categorías, deseleccionar todas las categorías
+    if (changes['coverageViewMode'] && !changes['coverageViewMode'].firstChange) {
+      if (this.coverageViewMode === 'categories') {
+        // Deseleccionar todas las categorías para mostrar todas por defecto
+        this.selectableCategories.forEach(cat => cat.selected = false);
+        this.emitSelectedCategories();
+      }
+    }
+  }
+
+  private initializeCategories(): void {
+    this.selectableCategories = COVERAGE_CATEGORIES.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      selected: false,
+      color: cat.color
+    }));
   }
 
   // Getter para devolver las clases ordenadas alfabéticamente para el panel de control
@@ -143,14 +177,10 @@ export class ControlPanelComponent implements OnInit {
   }
 
   onUploadScene(): void {
-    console.log('🎬 onUploadScene INICIADO EN CONTROL PANEL');
-    
     if (!this.selectedFile) {
       console.error('❌ No se ha seleccionado archivo');
       return;
     }
-
-    console.log('📄 selectedFile:', this.selectedFile.name);
 
     // Validar que TIFF sea válido
     if (this.tiffValidationResult && !this.tiffValidationResult.valid) {
@@ -167,14 +197,6 @@ export class ControlPanelComponent implements OnInit {
       this.captureDate = `${year}-${month}-${day}`;
     }
 
-    console.log('📤 Emitiendo sceneUpload con data:', {
-      file: this.selectedFile.name,
-      captureDate: this.captureDate,
-      epsg: this.epsg,
-      sensor: this.sensor,
-      regionId: this.regionId
-    });
-
     this.sceneUpload.emit({
       file: this.selectedFile,
       captureDate: this.captureDate,
@@ -182,8 +204,6 @@ export class ControlPanelComponent implements OnInit {
       sensor: this.sensor,
       regionId: this.regionId
     });
-
-    console.log('✅ sceneUpload EMITIDO');
   }
 
   get canUpload(): boolean {
@@ -232,6 +252,60 @@ export class ControlPanelComponent implements OnInit {
   deselectAllClasses(): void {
     this.classTypes.forEach(classType => classType.selected = false);
     this.classFilterChange.emit();
+  }
+
+  selectAllCategories(): void {
+    this.selectableCategories.forEach(cat => cat.selected = true);
+    this.syncCategoriesWithClasses();
+    this.emitSelectedCategories();
+    this.classFilterChange.emit();
+  }
+
+  deselectAllCategories(): void {
+    this.selectableCategories.forEach(cat => cat.selected = false);
+    this.syncCategoriesWithClasses();
+    this.emitSelectedCategories();
+    this.classFilterChange.emit();
+  }
+
+  areAllCategoriesSelected(): boolean {
+    return this.selectableCategories.length > 0 && this.selectableCategories.every(cat => cat.selected);
+  }
+
+  areAnyCategoriesSelected(): boolean {
+    return this.selectableCategories.some(cat => cat.selected);
+  }
+
+  onCategoryChange(): void {
+    this.syncCategoriesWithClasses();
+    this.emitSelectedCategories();
+    this.classFilterChange.emit();
+  }
+
+  private emitSelectedCategories(): void {
+    const selectedIds = this.selectableCategories
+      .filter(cat => cat.selected)
+      .map(cat => cat.id);
+    this.selectedCategoriesChange.emit(selectedIds);
+  }
+
+  private syncCategoriesWithClasses(): void {
+    // Obtener clases de las categorías seleccionadas
+    const selectedCategoryIds = this.selectableCategories
+      .filter(cat => cat.selected)
+      .map(cat => cat.id);
+
+    const classesInSelectedCategories = new Set<string>();
+    COVERAGE_CATEGORIES
+      .filter(cat => selectedCategoryIds.includes(cat.id))
+      .forEach(cat => {
+        cat.classes.forEach(className => classesInSelectedCategories.add(className));
+      });
+
+    // Actualizar selección de clases
+    this.classTypes.forEach(ct => {
+      ct.selected = classesInSelectedCategories.has(ct.label);
+    });
   }
 
   areAllClassesSelected(): boolean {

@@ -149,29 +149,62 @@
   </div>
 
   <div class="section">
-    <div class="filter-title">Clases Segmentadas:</div>
+    <div class="filter-title">{{ coverageViewMode === 'categories' ? 'Categorías Segmentadas:' : 'Clases Segmentadas:' }}</div>
     <div class="filter-controls">
-      <button 
-        class="filter-btn"
-        (click)="selectAllClasses()"
-        [disabled]="areAllClassesSelected()"
-        title="Seleccionar todas las clases"
-      >
-        <i class="pi pi-check-square"></i> Seleccionar todo
-      </button>
-      <button 
-        class="filter-btn"
-        (click)="deselectAllClasses()"
-        [disabled]="!areAnyClassesSelected()"
-        title="Deseleccionar todas las clases"
-      >
-        <i class="pi pi-times"></i> Deseleccionar todo
-      </button>
+      <!-- Vista de Clases -->
+      <ng-container *ngIf="coverageViewMode === 'classes'">
+        <button 
+          class="filter-btn"
+          (click)="selectAllClasses()"
+          [disabled]="areAllClassesSelected()"
+          title="Seleccionar todas las clases"
+        >
+          <i class="pi pi-check-square"></i> Seleccionar todo
+        </button>
+        <button 
+          class="filter-btn"
+          (click)="deselectAllClasses()"
+          [disabled]="!areAnyClassesSelected()"
+          title="Deseleccionar todas las clases"
+        >
+          <i class="pi pi-times"></i> Deseleccionar todo
+        </button>
+      </ng-container>
+
+      <!-- Vista de Categorías -->
+      <ng-container *ngIf="coverageViewMode === 'categories'">
+        <button 
+          class="filter-btn"
+          (click)="selectAllCategories()"
+          [disabled]="areAllCategoriesSelected()"
+          title="Seleccionar todas las categorías"
+        >
+          <i class="pi pi-check-square"></i> Seleccionar todo
+        </button>
+        <button 
+          class="filter-btn"
+          (click)="deselectAllCategories()"
+          [disabled]="!areAnyCategoriesSelected()"
+          title="Deseleccionar todas las categorías"
+        >
+          <i class="pi pi-times"></i> Deseleccionar todo
+        </button>
+      </ng-container>
     </div>
-    <div class="filter-group">
+
+    <!-- Vista de Clases -->
+    <div class="filter-group" *ngIf="coverageViewMode === 'classes'">
       <div class="checkbox-item" *ngFor="let classType of sortedClassTypes">
         <input type="checkbox" [id]="'class-' + classType.id" [(ngModel)]="classType.selected" (change)="notifyClassChange()">
         <label [for]="'class-' + classType.id">{{ classType.label }}</label>
+      </div>
+    </div>
+
+    <!-- Vista de Categorías -->
+    <div class="filter-group" *ngIf="coverageViewMode === 'categories'">
+      <div class="checkbox-item" *ngFor="let category of selectableCategories">
+        <input type="checkbox" [id]="'category-' + category.id" [(ngModel)]="category.selected" (change)="onCategoryChange()">
+        <label [for]="'category-' + category.id">{{ category.name }}</label>
       </div>
     </div>
   </div>

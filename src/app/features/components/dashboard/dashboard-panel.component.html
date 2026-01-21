@@ -38,8 +38,8 @@
     </div>
 
     <div class="card-stat">
-      <span class="stat-label">Total de Clases:</span>
-      <span class="stat-value">{{ selectedClassesCount }}</span>
+      <span class="stat-label">{{ coverageViewMode() === 'categories' ? 'Total de Categorías:' : 'Total de Clases:' }}</span>
+      <span class="stat-value">{{ coverageViewMode() === 'categories' ? selectedCategoriesCount : selectedClassesCount }}</span>
     </div>
     
     <!-- Mostrar información de celdas cuando NO hay cobertura por píxeles -->
@@ -74,7 +74,26 @@
         <span class="header-value">{{ convertArea(filteredTotalAreaM2) | noThousandSeparator:'1.2-2' }}</span>
       </div>
 
-      <table class="coverage-table">
+      <!-- Botones para cambiar vista (Clases vs Categorías) -->
+      <div class="coverage-view-toggle">
+        <button 
+          class="toggle-btn"
+          [class.active]="coverageViewMode() === 'classes'"
+          (click)="changeCoverageViewMode('classes')"
+        >
+          <i class="pi pi-list"></i> Por Clases
+        </button>
+        <button 
+          class="toggle-btn"
+          [class.active]="coverageViewMode() === 'categories'"
+          (click)="changeCoverageViewMode('categories')"
+        >
+          <i class="pi pi-objects-column"></i> Por Categorías
+        </button>
+      </div>
+
+      <!-- Tabla de Clases Individuales -->
+      <table class="coverage-table" *ngIf="coverageViewMode() === 'classes'">
         <thead>
           <tr>
             <th>Color</th>
@@ -109,15 +128,70 @@
           </tr>
         </tbody>
       </table>
+
+      <!-- Tabla de Categorías -->
+      <table class="coverage-table" *ngIf="coverageViewMode() === 'categories'">
+        <thead>
+          <tr>
+            <th>Color</th>
+            <th>Categoría</th>
+            <th>Área ({{ getAreaUnitLabel() }})</th>
+            <th>Cobertura (%)</th>
+            <th>Visualización</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let category of categorizedCoverageData" class="category-row">
+            <td class="color-cell">
+              <div 
+                class="color-box" 
+                [style.background-color]="category.categoryColor"
+                (click)="openCategoryColorPicker(category.categoryName)"
+                title="Haz clic para cambiar el color"
+              ></div>
+            </td>
+            <td class="category-name">{{ category.categoryName }}</td>
+            <td class="area-m2">{{ convertAreaForCategory(category.totalAreaM2) | noThousandSeparator:'1.2-2' }}</td>
+            <td class="coverage-percentage">{{ category.percentageOfTotal.toFixed(2) }}%</td>
+            <td class="coverage-bar">
+              <div class="progress-bar-pixel">
+                <div
+                  class="progress-fill-pixel"
+                  [style.width.%]="category.percentageOfTotal"
+                  [style.background-color]="category.categoryColor"
+                ></div>
+              </div>
+            </td>
+          </tr>
+          <!-- Detalles de clases dentro de cada categoría -->
+          <tr *ngFor="let category of categorizedCoverageData; let catIndex = index; let last = last" class="category-details">
+            <td colspan="5" *ngIf="category.classesInCategory.length > 0">
+              <div class="category-classes">
+                <!-- Encabezado de categoría -->
+                <div class="category-header">
+                  <i class="pi pi-angle-right"></i>
+                  <span class="category-title">{{ category.categoryName }}</span>
+                </div>
+                <!-- Clases dentro de la categoría -->
+                <div *ngFor="let classItem of category.classesInCategory" class="class-detail-row">
+                  <span class="indent"></span>
+                  <span class="detail-label">{{ classItem.className }}:</span>
+                  <span class="detail-value">{{ convertAreaForCategory(classItem.areaM2) | noThousandSeparator:'1.2-2' }} ({{ classItem.percentageOfCategory.toFixed(1) }}% de la categoría)</span>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
 <!-- Color Picker Modal -->
 <app-class-color-picker
   *ngIf="showColorPicker"
-  [className]="selectedColorClass"
-  [currentColor]="selectedColorValue"
-  [originalClassColors]="originalClassColors"
+  [className]="selectedColorClass || selectedColorCategory"
+  [currentColor]="selectedColorClass ? selectedColorValue : selectedCategoryColorValue"
+  [originalClassColors]="selectedColorClass ? originalClassColors : getMappedCategoryColors()"
   (colorSelected)="onColorSelected($event)"
   (close)="onColorPickerClose()"
 ></app-class-color-picker>

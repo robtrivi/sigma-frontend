@@ -1,5 +1,7 @@
 import { Injectable } from '@angular/core';
 import { PixelCoverageItem } from '../models/api.models';
+import { ClassColorService } from './class-color.service';
+import { groupCoverageByCategory } from '../models/coverage-categories';
 
 export interface MaskData {
   sceneId?: string;
@@ -10,6 +12,7 @@ export interface MaskData {
 
 export interface PeriodReportData {
   monthLabel: string;
+  periodo?: string;  // Período en formato YYYY-MM para regenerar máscaras
   pixelCoverageData: PixelCoverageItem[];
   filteredPixelCoverageData: PixelCoverageItem[];
   vegetationCoveragePercentage: number;
@@ -34,6 +37,9 @@ export interface ReportOptions {
   isMultipleMasks?: boolean;  // Flag indicando si es modo múltiples máscaras
   multiPeriodData?: PeriodReportData[];  // Array de datos por período para reportes multi-período
   areaUnit?: 'm2' | 'ha';  // Unidad de área seleccionada por el usuario
+  coverageViewMode?: 'classes' | 'categories';  // Modo de vista: clases o categorías
+  selectedCategoryIds?: string[];  // IDs de categorías seleccionadas en el panel de control
+  categoryColors?: Map<string, string>;  // Colores personalizados de categorías
 }
 
 @Injectable({
@@ -41,6 +47,8 @@ export interface ReportOptions {
 })
 export class ReportGeneratorService {
   private readonly M2_TO_HA = 0.0001; // Conversión: 1 m² = 0.0001 ha
+
+  constructor(private classColorService: ClassColorService) {}
 
   generateReport(options: ReportOptions): void {
     if (options.format === 'pdf') {
@@ -357,38 +365,110 @@ export class ReportGeneratorService {
         const totalArea = this.convertArea(options.totalAreaM2 || 0, areaUnit);
         const greenPercentage = options.vegetationCoveragePercentage || 0;
         const vegetationArea = this.convertArea(options.vegetationAreaM2 || 0, areaUnit);
-        const totalClassCount = options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta').length;
-        statsContent = `<div class="section"><div class="section-title">Estadísticas de Cobertura</div><div class="stats-grid"><div class="stat-card"><div class="stat-label">Área Total (${unitLabel})</div><div class="stat-value">${totalArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Cobertura Verde</div><div class="stat-value">${greenPercentage.toFixed(2)}%</div></div><div class="stat-card"><div class="stat-label">Áreas Verdes (${unitLabel})</div><div class="stat-value">${vegetationArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Total de Clases</div><div class="stat-value">${totalClassCount}</div></div></div></div>`;
+        
+        // Mostrar categorías o clases según el modo
+        let totalItemsLabel = 'Total de Clases';
+        let totalItemsCount = options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta').length;
+        
+        if (options.coverageViewMode === 'categories') {
+          const categorizedData = groupCoverageByCategory(options.pixelCoverageData, options.totalAreaM2 || 0);
+          totalItemsLabel = 'Total de Categorías';
+          
+          // Contar categorías según selección
+          if (options.selectedCategoryIds && options.selectedCategoryIds.length > 0) {
+            // Si hay categorías seleccionadas, contar solo las seleccionadas
+            totalItemsCount = options.selectedCategoryIds.length;
+          } else {
+            // Si no hay selección, contar todas las categorías
+            totalItemsCount = categorizedData.length;
+          }
+        }
+        
+        statsContent = `<div class="section"><div class="section-title">Estadísticas de Cobertura</div><div class="stats-grid"><div class="stat-card"><div class="stat-label">Área Total (${unitLabel})</div><div class="stat-value">${totalArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Cobertura Verde</div><div class="stat-value">${greenPercentage.toFixed(2)}%</div></div><div class="stat-card"><div class="stat-label">Áreas Verdes (${unitLabel})</div><div class="stat-value">${vegetationArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">${totalItemsLabel}</div><div class="stat-value">${totalItemsCount}</div></div></div></div>`;
       }
       content += statsContent;
     }
 
-    // Distribución de Clases
+    // Distribución de Clases o Categorías
     if (options.content.includes('classes')) {
       let classesContent = '';
       if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
-        const dataToDisplay = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? options.filteredPixelCoverageData : options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
-        const totalAreaFiltered = dataToDisplay.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
         const areaUnit = options.areaUnit || 'm2';
-        const displayTotalArea = this.convertArea(totalAreaFiltered, areaUnit);
         const unitLabel = this.getAreaUnitLabel(areaUnit);
-        const sortedData = [...dataToDisplay].sort((a, b) => (b.area_m2 || 0) - (a.area_m2 || 0));
-        classesContent = `<div class="section"><div class="section-title">Cobertura de Área (${unitLabel})</div><div style="margin-top: 15px;"><div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 2px solid #f0f0f0; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #2d5016;"><span>Área total (${unitLabel}):</span><span>${displayTotalArea.toFixed(2)}</span></div></div><table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;"><thead><tr style="background-color: #f5f5f5;"><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 30px;">Color</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 110px;">Clase</th><th style="padding: 8px 4px; text-align: right; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 60px;">Área (${unitLabel})</th><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 65px;">Cobertura (%)</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 140px;">Visualización</th></tr></thead><tbody>`;
-        sortedData.forEach(item => {
-          const percentage = totalAreaFiltered > 0 ? ((item.area_m2 || 0) / totalAreaFiltered * 100).toFixed(2) : '0.00';
-          const classColor = this.getColorForClass(item.class_name);
-          const displayArea = this.convertArea(item.area_m2 || 0, areaUnit);
-          classesContent += `<tr style="border-bottom: 1px solid #f0f0f0;"><td style="padding: 8px 4px; text-align: center;"><div style="width: 20px; height: 20px; border-radius: 3px; background-color: ${classColor}; border: 1px solid #ccc; display: inline-block; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></td><td style="padding: 8px 6px; font-size: 12px;">${item.class_name}</td><td style="padding: 8px 4px; text-align: right; font-size: 12px;">${displayArea.toFixed(2)}</td><td style="padding: 8px 4px; text-align: center; font-weight: 600; color: #2d5016; font-size: 12px;">${percentage}%</td><td style="padding: 8px 6px;"><div style="width: 100%; height: 16px; background-color: #f0f0f0; border-radius: 2px; overflow: hidden; border: 1px solid #ddd; print-color-adjust: exact; -webkit-print-color-adjust: exact;"><div style="height: 100%; width: ${percentage}%; background-color: ${classColor}; border-radius: 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></div></td></tr>`;
-        });
-        classesContent += `</tbody></table></div>`;
+        
+        if (options.coverageViewMode === 'categories') {
+          // Mostrar distribución por categorías
+          const dataToDisplay = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? options.filteredPixelCoverageData : options.pixelCoverageData;
+          const categorizedData = groupCoverageByCategory(dataToDisplay, options.totalAreaM2 || 0);
+          
+          // Filtrar categorías seleccionadas o todas si no hay selección
+          let categoriesToDisplay: typeof categorizedData;
+          if (options.selectedCategoryIds && options.selectedCategoryIds.length > 0) {
+            // Mostrar solo las categorías seleccionadas, incluso si no tienen datos
+            categoriesToDisplay = categorizedData
+              .filter(cat => options.selectedCategoryIds!.includes(cat.categoryId))
+              .sort((a, b) => b.totalAreaM2 - a.totalAreaM2);
+          } else {
+            // Mostrar todas las categorías sin filtrar por datos
+            categoriesToDisplay = categorizedData
+              .sort((a, b) => b.totalAreaM2 - a.totalAreaM2);
+          }
+          
+          const totalAreaFiltered = categoriesToDisplay.reduce((sum, cat) => sum + cat.totalAreaM2, 0);
+          const displayTotalArea = this.convertArea(totalAreaFiltered, areaUnit);
+          
+          classesContent = `<div class="section"><div class="section-title">Cobertura de Categorías (${unitLabel})</div><div style="margin-top: 15px;"><div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 2px solid #f0f0f0; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #2d5016;"><span>Área total (${unitLabel}):</span><span>${displayTotalArea.toFixed(2)}</span></div></div><table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;"><thead><tr style="background-color: #f5f5f5;"><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 30px;">Color</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 110px;">Categoría</th><th style="padding: 8px 4px; text-align: right; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 60px;">Área (${unitLabel})</th><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 65px;">Cobertura (%)</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 140px;">Visualización</th></tr></thead><tbody>`;
+          
+          categoriesToDisplay.forEach(category => {
+            const percentage = totalAreaFiltered > 0 ? (category.totalAreaM2 / totalAreaFiltered * 100).toFixed(2) : '0.00';
+            const displayArea = this.convertArea(category.totalAreaM2, areaUnit);
+            
+            // Usar el color personalizado de la categoría si está disponible, si no usar el color por defecto
+            const categoryColor = options.categoryColors?.get(category.categoryName) || category.categoryColor;
+            
+            classesContent += `<tr style="border-bottom: 1px solid #f0f0f0;"><td style="padding: 8px 4px; text-align: center;"><div style="width: 20px; height: 20px; border-radius: 3px; background-color: ${categoryColor}; border: 1px solid #ccc; display: inline-block; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></td><td style="padding: 8px 6px; font-size: 12px;">${category.categoryName}</td><td style="padding: 8px 4px; text-align: right; font-size: 12px;">${displayArea.toFixed(2)}</td><td style="padding: 8px 4px; text-align: center; font-weight: 600; color: #2d5016; font-size: 12px;">${percentage}%</td><td style="padding: 8px 6px;"><div style="width: 100%; height: 16px; background-color: #f0f0f0; border-radius: 2px; overflow: hidden; border: 1px solid #ddd; print-color-adjust: exact; -webkit-print-color-adjust: exact;"><div style="height: 100%; width: ${percentage}%; background-color: ${categoryColor}; border-radius: 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></div></td></tr>`;
+          });
+          
+          classesContent += `</tbody></table></div>`;
+        } else {
+          // Mostrar distribución por clases (modo original)
+          const dataToDisplay = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? options.filteredPixelCoverageData : options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
+          const totalAreaFiltered = dataToDisplay.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+          const displayTotalArea = this.convertArea(totalAreaFiltered, areaUnit);
+          const sortedData = [...dataToDisplay].sort((a, b) => (b.area_m2 || 0) - (a.area_m2 || 0));
+          classesContent = `<div class="section"><div class="section-title">Cobertura de Área (${unitLabel})</div><div style="margin-top: 15px;"><div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 2px solid #f0f0f0; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #2d5016;"><span>Área total (${unitLabel}):</span><span>${displayTotalArea.toFixed(2)}</span></div></div><table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;"><thead><tr style="background-color: #f5f5f5;"><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 30px;">Color</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 110px;">Clase</th><th style="padding: 8px 4px; text-align: right; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 60px;">Área (${unitLabel})</th><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 65px;">Cobertura (%)</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 140px;">Visualización</th></tr></thead><tbody>`;
+          sortedData.forEach(item => {
+            const percentage = totalAreaFiltered > 0 ? ((item.area_m2 || 0) / totalAreaFiltered * 100).toFixed(2) : '0.00';
+            const classColor = this.getColorForClass(item.class_name);
+            const displayArea = this.convertArea(item.area_m2 || 0, areaUnit);
+            classesContent += `<tr style="border-bottom: 1px solid #f0f0f0;"><td style="padding: 8px 4px; text-align: center;"><div style="width: 20px; height: 20px; border-radius: 3px; background-color: ${classColor}; border: 1px solid #ccc; display: inline-block; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></td><td style="padding: 8px 6px; font-size: 12px;">${item.class_name}</td><td style="padding: 8px 4px; text-align: right; font-size: 12px;">${displayArea.toFixed(2)}</td><td style="padding: 8px 4px; text-align: center; font-weight: 600; color: #2d5016; font-size: 12px;">${percentage}%</td><td style="padding: 8px 6px;"><div style="width: 100%; height: 16px; background-color: #f0f0f0; border-radius: 2px; overflow: hidden; border: 1px solid #ddd; print-color-adjust: exact; -webkit-print-color-adjust: exact;"><div style="height: 100%; width: ${percentage}%; background-color: ${classColor}; border-radius: 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></div></td></tr>`;
+          });
+          classesContent += `</tbody></table></div>`;
+        }
       }
       content += classesContent;
     }
 
     // Metadatos Técnicos
     if (options.content.includes('metadata')) {
-      const appliedFilters = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? `${options.filteredPixelCoverageData.length} clase(s) seleccionada(s)` : 'Ninguno';
-      content += `<div class="section"><div class="section-title">Metadatos Técnicos</div><table style="font-size: 14px;"><tr><td style="font-weight: 600; width: 30%;">Filtros Aplicados (Clases)</td><td>${appliedFilters}</td></tr><tr><td style="font-weight: 600;">Período Temporal</td><td>${monthLabel}</td></tr><tr><td style="font-weight: 600;">Región Analizada</td><td>${options.region === 'full' ? 'Campus Completo' : options.region === 'green-only' ? 'Solo Áreas Verdes' : 'Subregión Personalizada'}</td></tr><tr><td style="font-weight: 600;">Sistema</td><td>SIGMA v2.0 - ESPOL</td></tr><tr><td style="font-weight: 600;">Precisión</td><td>85%</td></tr></table></div>`;
+      const filterLabel = options.coverageViewMode === 'categories' ? 'Filtros Aplicados (Categorías)' : 'Filtros Aplicados (Clases)';
+      
+      let appliedFilters: string;
+      if (options.coverageViewMode === 'categories') {
+        // En modo categorías, mostrar el número de categorías seleccionadas o todas si no hay selección
+        if (options.selectedCategoryIds && options.selectedCategoryIds.length > 0) {
+          appliedFilters = `${options.selectedCategoryIds.length} categoría(s) seleccionada(s)`;
+        } else {
+          // Si no hay selección, contar todas las categorías
+          const categorizedData = groupCoverageByCategory(options.pixelCoverageData || [], options.totalAreaM2 || 0);
+          appliedFilters = `${categorizedData.length} categoría(s) seleccionada(s)`;
+        }
+      } else {
+        // En modo clases, mostrar el número de clases filtradas
+        appliedFilters = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? `${options.filteredPixelCoverageData.length} clase(s) seleccionada(s)` : 'Ninguno';
+      }
+      
+      content += `<div class="section"><div class="section-title">Metadatos Técnicos</div><table style="font-size: 14px;"><tr><td style="font-weight: 600; width: 30%;">${filterLabel}</td><td>${appliedFilters}</td></tr><tr><td style="font-weight: 600;">Período Temporal</td><td>${monthLabel}</td></tr><tr><td style="font-weight: 600;">Región Analizada</td><td>${options.region === 'full' ? 'Campus Completo' : options.region === 'green-only' ? 'Solo Áreas Verdes' : 'Subregión Personalizada'}</td></tr><tr><td style="font-weight: 600;">Sistema</td><td>SIGMA v2.0 - ESPOL</td></tr><tr><td style="font-weight: 600;">Precisión</td><td>85%</td></tr></table></div>`;
     }
 
     // Mapa Segmentado
@@ -551,6 +631,16 @@ export class ReportGeneratorService {
   }
 
   private getColorForClass(className: string): string {
+    // Intentar obtener color personalizado primero
+    const customColors = this.classColorService.getAllColors();
+    if (customColors && customColors.size > 0) {
+      const customColor = customColors.get(className);
+      if (customColor) {
+        // Convertir de formato #RRGGBB a #RRGGBB
+        return customColor;
+      }
+    }
+
     // Mapear nombre de clase a ID de clase para obtener el color correcto del catálogo
     const classNameToIdMap: { [key: string]: string } = {
       'Sin etiqueta': 'unlabeled',

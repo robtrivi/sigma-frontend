@@ -136,7 +136,6 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
     
     this.http.get<SegmentationProgress>(progressUrl).subscribe({
       next: (data) => {
-        console.log('[Progress] Fetched:', data);
         this.progress.set(data);
       },
       error: (error) => {

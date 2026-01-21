@@ -6,6 +6,7 @@ import { ClassColorPickerComponent } from '../class-color-picker/class-color-pic
 import { PixelCoverageItem } from '../../models/api.models';
 import { getClassColor } from '../../models/class-catalog';
 import { NoThousandSeparatorPipe } from '../../pipes/no-thousand-separator.pipe';
+import { CoverageItemByCategory, groupCoverageByCategory, COVERAGE_CATEGORIES } from '../../models/coverage-categories';
 
 @Component({
   selector: 'app-dashboard-panel',
@@ -33,16 +34,22 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   @Input() pixelCoverageDataInput: PixelCoverageItem[] = []; // Datos de cobertura del componente padre
   @Input() totalPixelsInput: number = 0; // Total de píxeles del componente padre
   @Input() totalAreaM2Input: number = 0; // Área total en m² del componente padre
+  @Input() selectedCategoryIds: string[] = []; // Categorías seleccionadas en el panel de control
   
   @Output() areaUnitChanged = new EventEmitter<'m2' | 'ha'>();
   @Output() visualizationTypeChanged = new EventEmitter<'mask' | 'original'>();
   @Output() classColorChanged = new EventEmitter<{ className: string; color: string }>();
+  @Output() coverageModeChanged = new EventEmitter<'classes' | 'categories'>();
   
   // ===== COLOR PICKER =====
   showColorPicker: boolean = false;
   selectedColorClass: string = '';
   selectedColorValue: string = '';
   originalClassColors: { className: string; color: string }[] = []; // Colores originales de todas las clases
+  
+  selectedColorCategory: string = '';
+  selectedCategoryColorValue: string = '';
+  originalCategoryColors: { categoryName: string; color: string }[] = [];
 
   pixelCoverageData: PixelCoverageItem[] = [];
   filteredPixelCoverageData: PixelCoverageItem[] = [];
@@ -61,6 +68,14 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   
   // ===== TIPO DE VISUALIZACIÓN =====
   visualizationType = signal<'mask' | 'original'>('mask'); // 'mask' o 'original'
+  
+  // ===== AGRUPAMIENTO POR CATEGORÍAS =====
+  coverageViewMode = signal<'classes' | 'categories'>('classes'); // 'classes' o 'categories'
+  categorizedCoverageData: CoverageItemByCategory[] = [];
+
+  get selectedCategoriesCount(): number {
+    return this.categorizedCoverageData.length;
+  }
 
   constructor(
     private segmentsService: SegmentsService,
@@ -74,16 +89,28 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    // Cuando los datos vienen del componente padre (múltiples máscaras agregadas)
-    // PERO solo si no tenemos datos del API (sceneId)
-    if (changes['pixelCoverageDataInput'] && this.pixelCoverageDataInput && this.pixelCoverageDataInput.length > 0) {
-      // Solo asignar si no hay sceneId (no se están cargando datos del API)
-      if (!this.sceneId) {
+    // Cuando los datos vienen del componente padre (datos filtrados)
+    // Esto puede ocurrir tanto con múltiples máscaras como cuando hay un sceneId cargado
+    if (changes['pixelCoverageDataInput'] && this.pixelCoverageDataInput !== undefined) {
+      if (this.pixelCoverageDataInput.length > 0) {
+        // Si hay datos, usarlos (ya están filtrados por el padre)
         this.pixelCoverageData = [...this.pixelCoverageDataInput];
+        this.filteredPixelCoverageData = [...this.pixelCoverageDataInput];
         this.totalPixels = this.totalPixelsInput > 0 ? this.totalPixelsInput : 262144;
         this.totalAreaM2 = this.totalAreaM2Input > 0 ? this.totalAreaM2Input : 262144.0;
+        this.filteredTotalPixels = this.totalPixels;
+        this.filteredTotalAreaM2 = this.totalAreaM2;
         this.dataLoaded = true;
-        this.filterPixelCoverageByClass();
+        // Actualizar datos categorizados si estamos en modo categorías
+        if (this.coverageViewMode() === 'categories') {
+          this.updateCategorizedCoverageData();
+        }
+      } else {
+        // Si está vacío, resetear
+        this.pixelCoverageData = [];
+        this.filteredPixelCoverageData = [];
+        this.categorizedCoverageData = [];
+        this.dataLoaded = false;
       }
     }
     
@@ -98,6 +125,10 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     // Cuando selectedClassIds cambia, filtrar SOLO si los datos han sido cargados
     if (changes['selectedClassIds'] && this.dataLoaded && this.pixelCoverageData && this.pixelCoverageData.length > 0) {
       this.filterPixelCoverageByClass();
+      // Actualizar datos categorizados si estamos en modo categorías
+      if (this.coverageViewMode() === 'categories') {
+        this.updateCategorizedCoverageData();
+      }
     }
   }
 
@@ -204,6 +235,11 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
       // Calcular total de píxeles y área filtrados
       this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
       this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+    }
+
+    // Actualizar datos categorizados si está en modo categorías
+    if (this.coverageViewMode() === 'categories') {
+      this.updateCategorizedCoverageData();
     }
   }
 
@@ -325,11 +361,134 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     if (this.selectedColorClass) {
       this.classColorService.setColor(this.selectedColorClass, color);
       this.classColorChanged.emit({ className: this.selectedColorClass, color });
+    } else if (this.selectedColorCategory) {
+      this.onCategoryColorSelected(color);
+      return;
     }
     this.showColorPicker = false;
   }
 
+  openCategoryColorPicker(categoryName: string): void {
+    this.selectedColorCategory = categoryName;
+    
+    // Obtener el color actual personalizado de la categoría (si existe)
+    this.selectedCategoryColorValue = this.classColorService.getCategoryColor(categoryName) || '#000000';
+    
+    // Construir lista de colores originales de TODAS las categorías desde COVERAGE_CATEGORIES
+    // Los colores originales NO deben cambiar aunque personalices el color
+    this.originalCategoryColors = COVERAGE_CATEGORIES.map(cat => ({
+      categoryName: cat.name,
+      color: cat.color  // Usar el color original de COVERAGE_CATEGORIES, no el personalizado
+    }));
+    
+    // Ordenar alfabéticamente
+    this.originalCategoryColors.sort((a: any, b: any) => a.categoryName.localeCompare(b.categoryName));
+    
+    this.showColorPicker = true;
+  }
+
+  onCategoryColorSelected(color: string): void {
+    if (this.selectedColorCategory) {
+      // Guardar el color de categoría de forma independiente (sin afectar colores de clases)
+      this.classColorService.setCategoryColor(this.selectedColorCategory, color);
+      
+      // Buscar la categoría y actualizar su color en memoria
+      const category = this.categorizedCoverageData.find(c => c.categoryName === this.selectedColorCategory);
+      if (category) {
+        category.categoryColor = color;
+        
+        // Forzar detección de cambios en el array
+        this.categorizedCoverageData = [...this.categorizedCoverageData];
+      }
+      
+      // Emitir el cambio
+      this.classColorChanged.emit({ className: this.selectedColorCategory, color });
+    }
+    this.showColorPicker = false;
+  }
+
+  // ===== MÉTODOS PARA AGRUPAMIENTO POR CATEGORÍAS =====
+  changeCoverageViewMode(mode: 'classes' | 'categories'): void {
+    this.coverageViewMode.set(mode);
+    this.coverageModeChanged.emit(mode);  // Emitir cambio al componente padre
+    if (mode === 'categories') {
+      this.updateCategorizedCoverageData();
+    }
+  }
+
+  private updateCategorizedCoverageData(): void {
+    const allCategorizedData = groupCoverageByCategory(
+      this.filteredPixelCoverageData,
+      this.filteredTotalAreaM2
+    );
+    
+    // Filtrar solo las categorías que están seleccionadas en el panel de control
+    if (this.selectedCategoryIds && this.selectedCategoryIds.length > 0) {
+      this.categorizedCoverageData = allCategorizedData.filter(cat => 
+        this.selectedCategoryIds.includes(cat.categoryId)
+      );
+    } else {
+      // Si no hay categorías seleccionadas, mostrar todas (no debería pasar en uso normal)
+      this.categorizedCoverageData = allCategorizedData;
+    }
+    
+    // Aplicar colores personalizados del servicio a las categorías
+    for (const category of this.categorizedCoverageData) {
+      // Obtener el color personalizado de la categoría desde el servicio
+      const customColor = this.classColorService.getCategoryColor(category.categoryName);
+      if (customColor) {
+        category.categoryColor = customColor;
+      }
+    }
+  }
+
+  convertAreaForCategory(areaM2: number): number {
+    if (this.areaUnit() === 'ha') {
+      return areaM2 * this.M2_TO_HA;
+    }
+    return areaM2;
+  }
+
+  getHexColor(color: string): string {
+    // Si ya es hexadecimal, devolverlo
+    if (color.startsWith('#')) {
+      return color;
+    }
+    // Si es RGB, convertir a hexadecimal
+    return color;
+  }
+
+  getMappedCategoryColors(): { className: string; color: string }[] {
+    // Mapear categoryName a className para compatibilidad con el componente color-picker
+    // Usar SIEMPRE los colores originales de las categorías, NO los personalizados
+    const mapped = this.originalCategoryColors.map(cat => ({
+      className: (cat as any).categoryName,
+      color: cat.color
+    }));
+    
+    return mapped;
+  }
+
+  onCategoryColorChanged(categoryName: string, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const newColor = input.value;
+    
+    // Actualizar el color en el dashboard
+    const categoryData = this.categorizedCoverageData.find(cat => cat.categoryName === categoryName);
+    if (categoryData) {
+      categoryData.categoryColor = newColor;
+    }
+    
+    // Guardar el color de categoría en el servicio (sin afectar colores de clases)
+    this.classColorService.setCategoryColor(categoryName, newColor);
+    
+    // Emitir evento para que Leaflet se recargue
+    this.classColorChanged.emit({ className: `category:${categoryName}`, color: newColor });
+  }
+
   onColorPickerClose(): void {
     this.showColorPicker = false;
+    this.selectedColorClass = '';
+    this.selectedColorCategory = '';
   }
 }

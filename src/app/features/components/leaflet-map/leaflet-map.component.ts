@@ -104,6 +104,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   @Input() regionId?: string; // Para cargar múltiples máscaras del período
   @Input() periodo?: string; // Período para cargar múltiples máscaras
   @Input() visualizationType: 'mask' | 'original' = 'mask'; // Tipo de visualización: máscara o imagen original
+  @Input() coverageViewMode: 'classes' | 'categories' = 'classes'; // Modo de vista de cobertura
   @Output() featureClick = new EventEmitter<SegmentFeature>();
   @Output() multipeMasksLoaded = new EventEmitter<{ regionId: string; periodo: string; maskImages: string[]; maskMetadata?: any[] }>();
   @Output() maskLoaded = new EventEmitter<string>();  // Emite cuando se carga la máscara
@@ -123,7 +124,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   maskOpacity: number = 1.0;
   private maskCenteredOnce: boolean = false;
   private lastLoadedClasses: string = '';
-  private lastMultipleMaskClasses: string = ''; // Track últimas clases usadas para máscaras múltiples
+  private lastMultipleMaskClasses: string | null = null; // Track últimas clases usadas para máscaras múltiples - iniciar como null para forzar carga inicial
   private isLoadingMask: boolean = false;
   private originalImageLayer?: L.Layer;  // Capa para la imagen original (escena individual)
   private originalImageUrl: string = '';  // URL de la imagen original
@@ -190,7 +191,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     if ((changes['periodo'] || changes['regionId']) && this.periodo && this.regionId) {
       this.maskCenteredOnce = false;
       this.lastLoadedClasses = '';
-      this.lastMultipleMaskClasses = ''; // Reset para que las clases actuales se apliquen
+      this.lastMultipleMaskClasses = null; // Reset para que las clases actuales se apliquen
       this.clearSingleMask(); // Limpiar máscara individual si existe
       this.clearMultipleMasks(); // Limpiar máscaras anteriores del período
       this.loadMasksForPeriod();
@@ -528,8 +529,9 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         : this.classTypes.map(c => c.id);  // Todas las clases del UI (ya sin unlabeled)
       
       // Pasar clases al servicio y colores personalizados si existen
-      const customColors = this.classColorService.getAllColors();
-      this.segmentsService.getMasksForPeriod(this.regionId, this.periodo, classesToShow, customColors).subscribe({
+      // Usar getColorsForRendering para obtener los colores correctos según el modo de vista
+      const customColors = this.classColorService.getColorsForRendering(this.coverageViewMode);
+      this.segmentsService.getMasksForPeriod(this.regionId, this.periodo, classesToShow, customColors, false).subscribe({
         next: (response: any) => {
           const masks = response.masks || [];
           
@@ -537,7 +539,6 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
             this.isLoadingMask = false;
             return;
           }
-
           // Limpiar capas anteriores
           this.clearMultipleMasks();
           this.clearOriginalImagesMultiple();
