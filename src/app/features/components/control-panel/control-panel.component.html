@@ -118,6 +118,24 @@
 
   <div class="section">
     <div class="filter-title">Filtro Temporal - Período:</div>
+    <div class="filter-controls">
+      <button 
+        class="filter-btn"
+        (click)="selectAllMonths()"
+        [disabled]="areAllMonthsSelected()"
+        title="Seleccionar todos los períodos"
+      >
+        <i class="pi pi-check-square"></i> Seleccionar todo
+      </button>
+      <button 
+        class="filter-btn"
+        (click)="deselectAllMonths()"
+        [disabled]="!areAnyMonthsSelected()"
+        title="Deseleccionar todos los períodos"
+      >
+        <i class="pi pi-times"></i> Deseleccionar todo
+      </button>
+    </div>
     <div class="filter-group">
       <div class="checkbox-item" *ngFor="let month of months" (click)="toggleMonth(month)">
         <input type="checkbox" 
@@ -132,8 +150,26 @@
 
   <div class="section">
     <div class="filter-title">Clases Segmentadas:</div>
+    <div class="filter-controls">
+      <button 
+        class="filter-btn"
+        (click)="selectAllClasses()"
+        [disabled]="areAllClassesSelected()"
+        title="Seleccionar todas las clases"
+      >
+        <i class="pi pi-check-square"></i> Seleccionar todo
+      </button>
+      <button 
+        class="filter-btn"
+        (click)="deselectAllClasses()"
+        [disabled]="!areAnyClassesSelected()"
+        title="Deseleccionar todas las clases"
+      >
+        <i class="pi pi-times"></i> Deseleccionar todo
+      </button>
+    </div>
     <div class="filter-group">
-      <div class="checkbox-item" *ngFor="let classType of classTypes">
+      <div class="checkbox-item" *ngFor="let classType of sortedClassTypes">
         <input type="checkbox" [id]="'class-' + classType.id" [(ngModel)]="classType.selected" (change)="notifyClassChange()">
         <label [for]="'class-' + classType.id">{{ classType.label }}</label>
       </div>

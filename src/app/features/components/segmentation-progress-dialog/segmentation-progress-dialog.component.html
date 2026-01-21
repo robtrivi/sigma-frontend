@@ -18,7 +18,7 @@
           ></div>
         </div>
         <div class="progress-text">
-          {{ progressPercentage() | number: '1.0-0' }}%
+          {{ progressPercentage() | noThousandSeparator: '1.0-0' }}%
         </div>
       </div>
 

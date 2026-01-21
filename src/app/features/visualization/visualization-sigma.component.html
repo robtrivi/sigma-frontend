@@ -39,6 +39,7 @@
           [regionId]="selectedRegionId"
           [periodo]="selectedPeriodo"
           [selectedClassIds]="getSelectedClassIds()"
+          [visualizationType]="visualizationType()"
           (featureClick)="onFeatureClick($event)"
           (multipeMasksLoaded)="onMultipleMasksLoaded($event)"
           (maskLoaded)="onMaskLoaded($event)"
@@ -61,6 +62,9 @@
           [pixelCoverageDataInput]="filteredPixelCoverageData"
           [totalPixelsInput]="filteredTotalPixels"
           [totalAreaM2Input]="filteredTotalAreaM2"
+          (areaUnitChanged)="onAreaUnitChanged($event)"
+          (visualizationTypeChanged)="onVisualizationTypeChanged($event)"
+          (classColorChanged)="onClassColorChanged($event)"
         ></app-dashboard-panel>
       </div>
 
@@ -70,7 +74,6 @@
         </div>
         <div class="toolbar-buttons">
           <button class="btn-delete" (click)="showClearDataDialog()">Borrar Datos</button>
-          <button class="btn-secondary" (click)="clearFilters()">Limpiar Filtros</button>
           <button class="btn-primary" (click)="downloadReport()">Descargar Informe</button>
         </div>
       </div>
@@ -97,4 +100,22 @@
     (onClose)="onProgressDialogClose()"
     (onVisualize)="onVisualizeMapa($event)"
   ></app-segmentation-progress-dialog>
+
+  <app-mask-loading-dialog
+    [isVisible]="showMaskLoadingDialog"
+    [periodLabel]="maskLoadingPeriodLabel"
+    [visualizationType]="visualizationType()"
+  ></app-mask-loading-dialog>
+
+  <app-loading-dialog
+    [isVisible]="showReportGeneratingDialog"
+    [title]="reportGeneratingTitle"
+    [message]="reportGeneratingMessage"
+  ></app-loading-dialog>
+
+  <app-loading-dialog
+    [isVisible]="showVisualizationLoadingDialog"
+    [title]="visualizationLoadingTitle"
+    [message]="visualizationLoadingMessage"
+  ></app-loading-dialog>
 </div>

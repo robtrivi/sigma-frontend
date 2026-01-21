@@ -99,7 +99,7 @@ export class SegmentsService {
     );
   }
 
-  getMasksForPeriod(regionId: string, periodo: string, selectedClassIds?: string[]): Observable<any> {
+  getMasksForPeriod(regionId: string, periodo: string, selectedClassIds?: string[], customColors?: Map<string, string>): Observable<any> {
     let params = new HttpParams().set('periodo', periodo);
     
     // Pasar clases seleccionadas si existen
@@ -120,6 +120,46 @@ export class SegmentsService {
       
       if (classNumbers) {
         params = params.set('classes', classNumbers);
+      }
+    }
+    
+    // Pasar colores personalizados si existen
+    if (customColors && customColors.size > 0) {
+      // Mapear nombres de clases españoles a ingleses
+      const SPANISH_TO_ENGLISH_CLASS_NAMES: Record<string, string> = {
+        'Área pavimentada': 'paved-area',
+        'Tierra': 'dirt',
+        'Césped': 'grass',
+        'Grava': 'gravel',
+        'Agua': 'water',
+        'Rocas': 'rocks',
+        'Piscina': 'pool',
+        'Vegetación': 'vegetation',
+        'Techo': 'roof',
+        'Pared': 'wall',
+        'Ventana': 'window',
+        'Puerta': 'door',
+        'Cerca': 'fence',
+        'Poste de cerca': 'fence-pole',
+        'Persona': 'person',
+        'Perro': 'dog',
+        'Automóvil': 'car',
+        'Bicicleta': 'bicycle',
+        'Árbol': 'tree',
+        'Árbol sin hojas': 'bald-tree',
+        'Marcador AR': 'ar-marker',
+        'Obstáculo': 'obstacle',
+        'En conflicto': 'conflicting'
+      };
+      
+      const colorString = Array.from(customColors.entries())
+        .map(([className, color]) => {
+          const englishName = SPANISH_TO_ENGLISH_CLASS_NAMES[className] || className;
+          return `${englishName}:${color.substring(1)}`;
+        })
+        .join('|');
+      if (colorString) {
+        params = params.set('colors', colorString);
       }
     }
     

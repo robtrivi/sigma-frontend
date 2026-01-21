@@ -1,23 +1,35 @@
 <div class="dashboard-section">
   <div class="dashboard-card">
-    <div class="dashboard-card-title"><i class="pi pi-chart-bar"></i> {{ dashboardTitle }}</div>
+    <div class="dashboard-card-header">
+      <div class="dashboard-card-title"><i class="pi pi-chart-bar"></i> {{ dashboardTitle }}</div>
+      <div class="header-buttons">
+        <button class="vis-toggle-btn" (click)="toggleVisualizationType()" [title]="'Visualización: ' + getVisualizationTypeLabel() + ' • Haz clic para cambiar'" *ngIf="sceneId">
+          <i class="pi" [ngClass]="visualizationType() === 'mask' ? 'pi-image' : 'pi-camera'"></i>
+          {{ getVisualizationTypeLabel() }}
+        </button>
+        <button class="unit-toggle-btn" (click)="toggleAreaUnit()" [title]="'Unidades: ' + getAreaUnitLabel() + ' • Haz clic para cambiar a ' + (areaUnit() === 'm2' ? 'hectáreas' : 'metros cuadrados')">
+          {{ getAreaUnitLabel() }}
+          <i class="pi pi-chevron-down"></i>
+        </button>
+      </div>
+    </div>
     
     <!-- Mostrar área total cuando hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="usePixelCoverage">
-      <span class="stat-label">Área total (m²):</span>
-      <span class="stat-value large">{{ filteredTotalAreaM2 | number:'1.2-2' }}</span>
+      <span class="stat-label">Área total ({{ getAreaUnitLabel() }}):</span>
+      <span class="stat-value large">{{ convertArea(filteredTotalAreaM2) | noThousandSeparator:'1.2-2' }}</span>
     </div>
     
     <!-- Mostrar conteo de celdas cuando NO hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="!usePixelCoverage">
       <span class="stat-label">{{ statLabel }}:</span>
-      <span class="stat-value large">{{ visibleSegmentsCount | number }}</span>
+      <span class="stat-value large">{{ visibleSegmentsCount | noThousandSeparator }}</span>
     </div>
     
     <!-- Mostrar información de clases cuando hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="usePixelCoverage">
       <span class="stat-label">{{ coverageLabel }}:</span>
-      <span class="stat-value">{{ coverageAreaM2 | number:'1.2-2' }} m² ({{ coveragePercentage | number:'1.2-2' }}%)</span>
+      <span class="stat-value">{{ convertArea(coverageAreaM2) | noThousandSeparator:'1.2-2' }} {{ getAreaUnitLabel() }} ({{ coveragePercentage | noThousandSeparator:'1.2-2' }}%)</span>
     </div>
 
     <div class="card-stat" *ngIf="usePixelCoverage && selectedPeriodo">
@@ -33,19 +45,19 @@
     <!-- Mostrar información de celdas cuando NO hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="!usePixelCoverage">
       <span class="stat-label">Total de celdas:</span>
-      <span class="stat-value">{{ totalSegmentsCount | number }}</span>
+      <span class="stat-value">{{ totalSegmentsCount | noThousandSeparator }}</span>
     </div>
 
     <div class="card-stat" *ngIf="!usePixelCoverage">
       <span class="stat-label">{{ coverageLabel }}:</span>
-      <span class="stat-value">{{ coverageAreaM2 | number:'1.2-2' }} m² ({{ coveragePercentage | number:'1.2-2' }}%)</span>
+      <span class="stat-value">{{ convertArea(coverageAreaM2) | noThousandSeparator:'1.2-2' }} {{ getAreaUnitLabel() }} ({{ coveragePercentage | noThousandSeparator:'1.2-2' }}%)</span>
     </div>
   </div>
 
   <!-- ===== NUEVA SECCIÓN: COBERTURA POR PÍXELES ===== -->
   <div class="dashboard-card" *ngIf="sceneId || (usePixelCoverage && filteredPixelCoverageData.length > 0)">
     <div class="dashboard-card-title">
-      <i class="pi pi-objects-column"></i> Cobertura de Área (m²)
+      <i class="pi pi-objects-column"></i> Cobertura de Área ({{ getAreaUnitLabel() }})
     </div>
 
     <div *ngIf="isLoadingCoverage" class="loading-state">
@@ -58,8 +70,8 @@
 
     <div *ngIf="!isLoadingCoverage && !coverageError && pixelCoverageData.length > 0">
       <div class="coverage-header">
-        <span class="header-label">Área total (m²):</span>
-        <span class="header-value">{{ filteredTotalAreaM2 | number:'1.2-2' }}</span>
+        <span class="header-label">Área total ({{ getAreaUnitLabel() }}):</span>
+        <span class="header-value">{{ convertArea(filteredTotalAreaM2) | noThousandSeparator:'1.2-2' }}</span>
       </div>
 
       <table class="coverage-table">
@@ -67,7 +79,7 @@
           <tr>
             <th>Color</th>
             <th>Clase</th>
-            <th>Área (m²)</th>
+            <th>Área ({{ getAreaUnitLabel() }})</th>
             <th>Cobertura (%)</th>
             <th>Visualización</th>
           </tr>
@@ -75,17 +87,22 @@
         <tbody>
           <tr *ngFor="let item of filteredPixelCoverageData">
             <td class="color-cell">
-              <div class="color-box" [style.background-color]="getColorForClass(item.class_name)"></div>
+              <div 
+                class="color-box" 
+                [style.background-color]="getClassColor(item.class_name)"
+                (click)="openColorPicker(item.class_name)"
+                title="Haz clic para cambiar el color"
+              ></div>
             </td>
             <td>{{ item.class_name }}</td>
-            <td class="area-m2">{{ (item.area_m2 || 0) | number:'1.2-2' }}</td>
+            <td class="area-m2">{{ convertArea(item.area_m2 || 0) | noThousandSeparator:'1.2-2' }}</td>
             <td class="coverage-percentage">{{ ((item.area_m2 || 0) / (filteredTotalAreaM2 || 1) * 100).toFixed(2) }}%</td>
             <td class="coverage-bar">
               <div class="progress-bar-pixel">
                 <div
                   class="progress-fill-pixel"
                   [style.width.%]="(item.area_m2 || 0) / (filteredTotalAreaM2 || 1) * 100"
-                  [style.background-color]="getColorForClass(item.class_name)"
+                  [style.background-color]="getClassColor(item.class_name)"
                 ></div>
               </div>
             </td>
@@ -95,3 +112,12 @@
     </div>
   </div>
 </div>
+<!-- Color Picker Modal -->
+<app-class-color-picker
+  *ngIf="showColorPicker"
+  [className]="selectedColorClass"
+  [currentColor]="selectedColorValue"
+  [originalClassColors]="originalClassColors"
+  (colorSelected)="onColorSelected($event)"
+  (close)="onColorPickerClose()"
+></app-class-color-picker>

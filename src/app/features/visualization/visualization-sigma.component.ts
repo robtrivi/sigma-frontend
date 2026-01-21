@@ -7,11 +7,14 @@ import { VisualizationHeaderComponent } from '../components/header/visualization
 import { DownloadModalComponent } from '../components/download-modal/download-modal.component';
 import { ClearDataConfirmationDialogComponent } from '../components/clear-data-confirmation-dialog/clear-data-confirmation-dialog.component';
 import { SegmentationProgressDialogComponent } from '../components/segmentation-progress-dialog/segmentation-progress-dialog.component';
+import { MaskLoadingDialogComponent } from '../components/mask-loading-dialog/mask-loading-dialog.component';
+import { LoadingDialogComponent } from '../components/loading-dialog/loading-dialog.component';
 import { ChartBar, ClassDistributionStat, ClassType, MonthFilter } from '../models/visualization.models';
 import { ReportGeneratorService, PeriodReportData } from '../services/report-generator.service';
 import { ScenesService } from '../services/scenes.service';
 import { SegmentsService } from '../services/segments.service';
 import { RegionsService } from '../services/regions.service';
+import { ClassColorService } from '../services/class-color.service';
 import { SegmentFeature, SceneResponse, Region, PeriodInfo, PixelCoverageItem, SegmentationCoverageResponse } from '../models/api.models';
 import { CLASS_CATALOG, getClassConfig } from '../models/class-catalog';
 import { finalize, forkJoin } from 'rxjs';
@@ -27,7 +30,9 @@ import { finalize, forkJoin } from 'rxjs';
     VisualizationHeaderComponent,
     DownloadModalComponent,
     ClearDataConfirmationDialogComponent,
-    SegmentationProgressDialogComponent
+    SegmentationProgressDialogComponent,
+    MaskLoadingDialogComponent,
+    LoadingDialogComponent
   ],
   templateUrl: './visualization-sigma.component.html',
   styleUrls: ['./visualization-sigma.component.scss']
@@ -68,12 +73,25 @@ export class VisualizationSigmaComponent implements OnInit {
   
   // ===== MÁSCARAS MÚLTIPLES =====
   multipleMaskImages: string[] = [];  // URLs de máscaras múltiples para reportes
+  multipleMaskMetadata: any[] = [];  // Metadatos de máscaras (sceneId, captureDate, etc.)
   
   // ===== DATOS DE MÚLTIPLES PERÍODOS PARA REPORTES =====
   multiPeriodReportData: PeriodReportData[] = [];  // Datos para cada período seleccionado en reportes
 
+  // ===== UNIDADES DE ÁREA =====
+  selectedAreaUnit: 'm2' | 'ha' = 'm2';  // Unidad de área seleccionada en el dashboard
+
   // ===== DIÁLOGOS =====
   showClearDataConfirmation: boolean = false;  // Diálogo de confirmación de borrado
+  showMaskLoadingDialog = signal(false);  // Diálogo de carga de máscaras
+  maskLoadingPeriodLabel = signal('');  // Etiqueta del período en el diálogo de carga
+  showReportGeneratingDialog = signal(false);  // Diálogo de generación de informe
+  reportGeneratingTitle = signal('Generando Informe');  // Título del diálogo de generación
+  reportGeneratingMessage = signal('Por favor espere...');  // Mensaje del diálogo de generación
+  showVisualizationLoadingDialog = signal(false);  // Diálogo de carga de visualización
+  visualizationLoadingTitle = signal('');  // Título del diálogo de carga de visualización
+  visualizationLoadingMessage = signal('Por favor espere...');  // Mensaje del diálogo de carga de visualización
+  visualizationType = signal<'mask' | 'original'>('mask');  // Tipo de visualización: máscara o imagen original
 
   months: MonthFilter[] = [
     { id: '2024-08', label: 'Agosto 2024', selected: false },
@@ -99,7 +117,8 @@ export class VisualizationSigmaComponent implements OnInit {
     private reportGenerator: ReportGeneratorService,
     private scenesService: ScenesService,
     private segmentsService: SegmentsService,
-    private regionsService: RegionsService
+    private regionsService: RegionsService,
+    private classColorService: ClassColorService
   ) {}
 
   ngOnInit(): void {
@@ -199,6 +218,15 @@ export class VisualizationSigmaComponent implements OnInit {
     this.loadingMessage.set('Cargando escena TIFF...');
     this.errorMessage.set('');
 
+    // ✅ MOSTRAR DIÁLOGO DE PROGRESO INMEDIATAMENTE (antes de la respuesta HTTP)
+    this.showProgressDialog.set(true);
+    const tempSceneId = `temp-${Date.now()}`;
+    this.progressSceneId.set(tempSceneId);
+    
+    if (this.progressDialog) {
+      this.progressDialog.startStreaming(tempSceneId);
+    }
+
     this.scenesService.uploadScene({
       file: data.file,
       captureDate: data.captureDate,
@@ -212,6 +240,13 @@ export class VisualizationSigmaComponent implements OnInit {
     }))
     .subscribe({
       next: (scene) => {
+        // ✅ Actualizar el sceneId real cuando llegue la respuesta
+        this.progressSceneId.set(scene.sceneId);
+        
+        if (this.progressDialog) {
+          this.progressDialog.startStreaming(scene.sceneId);
+        }
+        
         this.currentScene = scene;
         this.uploadedFile = data.file.name;
         this.selectedRegionId = scene.regionId;
@@ -219,19 +254,12 @@ export class VisualizationSigmaComponent implements OnInit {
         const periodo = scene.captureDate.substring(0, 7);
         this.selectedPeriodo = periodo;
         
-        // Mostrar diálogo de progreso
-        this.showProgressDialog.set(true);
-        this.progressSceneId.set(scene.sceneId);
-        
-        if (this.progressDialog) {
-          this.progressDialog.startStreaming(scene.sceneId);
-        }
-        
         this.loadAvailablePeriods();
       },
       error: (err) => {
         console.error('Error cargando escena:', err);
         this.errorMessage.set(err.error?.message || 'Error al cargar la escena');
+        this.showProgressDialog.set(false); // Cerrar diálogo si hay error
       }
     });
   }
@@ -381,6 +409,18 @@ export class VisualizationSigmaComponent implements OnInit {
     .pipe(finalize(() => {
       this.isLoading.set(false);
       this.loadingMessage.set('');
+      
+      // Respetar el tipo de visualización seleccionado: si estaba en "original", mantenerlo
+      if (this.visualizationType() === 'original') {
+        setTimeout(() => {
+          this.onVisualizationTypeChanged('original');
+        }, 500);
+      }
+      
+      // Cerrar el diálogo de carga de máscaras después de 5 segundos
+      setTimeout(() => {
+        this.showMaskLoadingDialog.set(false);
+      }, 10000);
     }))
     .subscribe({
       next: (response) => {
@@ -404,13 +444,26 @@ export class VisualizationSigmaComponent implements OnInit {
   onFeatureClick(feature: SegmentFeature): void {
   }
 
-  onMultipleMasksLoaded(event: { regionId: string; periodo: string; maskImages: string[] }): void {
+  onMultipleMasksLoaded(event: { regionId: string; periodo: string; maskImages: string[]; maskMetadata?: any[] }): void {
     // Se llamó cuando se cargan múltiples máscaras de un período
     // Guardar las imágenes de máscaras para reportes
     this.multipleMaskImages = event.maskImages || [];
+    // Guardar los metadatos de las máscaras (incluye sceneId, captureDate, etc.)
+    this.multipleMaskMetadata = event.maskMetadata || [];
     
     // Solo cargar píxeles agregados si NO hay una escena individual seleccionada
     if (!this.currentScene?.sceneId) {
+      // Crear un sceneId temporal para permitir visualización toggle en dashboard
+      // Usar el regionId como identificador único
+      this.currentScene = {
+        sceneId: event.regionId,
+        regionId: event.regionId,
+        captureDate: new Date().toISOString(),
+        epsg: 32717,
+        sensor: 'aggregated',
+        rasterPath: ''
+      };
+      
       this.loadAggregatedPixelCoverage(event.regionId, event.periodo);
     }
   }
@@ -457,6 +510,11 @@ export class VisualizationSigmaComponent implements OnInit {
     this.selectedPeriodo = monthId;
     
     if (this.selectedRegionId) {
+      // Mostrar el diálogo de carga
+      const monthLabel = this.months.find(m => m.id === monthId)?.label || monthId;
+      this.maskLoadingPeriodLabel.set(monthLabel);
+      this.showMaskLoadingDialog.set(true);
+      
       this.loadSegmentsTiles();
     }
   }
@@ -668,23 +726,6 @@ export class VisualizationSigmaComponent implements OnInit {
     return info;
   }
 
-  clearFilters(): void {
-    // Desmarcar todas las clases
-    this.classTypes.forEach(ct => ct.selected = false);
-    
-    // Filtrar píxeles localmente sin recargar
-    this.filterPixelCoverageByClass();
-    
-    if (this.availablePeriods.length > 0) {
-      // Seleccionar el período más reciente, como cuando se recarga el navegador
-      const mostRecentPeriod = this.findMostRecentPeriod(this.availablePeriods.map(p => p.periodo));
-      this.selectedPeriodo = mostRecentPeriod;
-      this.activeMonth = mostRecentPeriod;
-      this.months.forEach(m => m.selected = m.id === mostRecentPeriod);
-      this.loadSegmentsTiles();
-    }
-  }
-
   getSelectedClassIds(): string[] {
     return this.classTypes
       .filter(c => c.selected)
@@ -832,8 +873,8 @@ export class VisualizationSigmaComponent implements OnInit {
           const masks = maskResponse?.masks || [];
           const multipleMasks = masks.length > 0 
             ? masks.map((maskData: any) => ({
-                sceneId: `Escena ${masks.indexOf(maskData) + 1}`,
-                captureDate: new Date().toISOString().split('T')[0],
+                sceneId: maskData.sceneId,
+                captureDate: maskData.captureDate,
                 imageUrl: maskData.image,
                 pixelCoverageData: pixelCoverageData
               }))
@@ -876,8 +917,8 @@ export class VisualizationSigmaComponent implements OnInit {
     // Preparar datos de máscaras múltiples si existen
     const multipleMasks = this.usePixelCoverage && this.multipleMaskImages.length > 0
       ? this.multipleMaskImages.map((imageUrl, index) => ({
-          sceneId: `Escena ${index + 1}`,
-          captureDate: new Date().toISOString().split('T')[0],
+          sceneId: this.multipleMaskMetadata[index]?.sceneId || `Escena ${index + 1}`,
+          captureDate: this.multipleMaskMetadata[index]?.captureDate || new Date().toISOString().split('T')[0],
           imageUrl: imageUrl,
           pixelCoverageData: this.pixelCoverageData
         }))
@@ -898,7 +939,9 @@ export class VisualizationSigmaComponent implements OnInit {
       maskImageUrl: maskImageUrl,
       // Pasar máscaras múltiples si existen
       multipleMasks: multipleMasks,
-      isMultipleMasks: this.usePixelCoverage && this.multipleMaskImages.length > 0
+      isMultipleMasks: this.usePixelCoverage && this.multipleMaskImages.length > 0,
+      // Pasar la unidad de área seleccionada
+      areaUnit: this.selectedAreaUnit
     });
   }
 
@@ -908,11 +951,16 @@ export class VisualizationSigmaComponent implements OnInit {
       content: data.content,
       region: data.region as 'full' | 'subregion' | 'green-only',
       // Pasar datos de múltiples períodos
-      multiPeriodData: this.multiPeriodReportData
+      multiPeriodData: this.multiPeriodReportData,
+      // Pasar la unidad de área seleccionada
+      areaUnit: this.selectedAreaUnit
     });
   }
 
   onDownloadModalSubmit(data: { format: string; content: string[]; region: string }): void {
+    // Mostrar diálogo de generación
+    this.showReportGeneratingDialog.set(true);
+
     // Detectar si hay múltiples períodos seleccionados
     const selectedMonths = this.getSelectedMonths();
     
@@ -922,6 +970,49 @@ export class VisualizationSigmaComponent implements OnInit {
     } else {
       // Generar reporte de un único período
       this.generateSinglePeriodReport(data);
+    }
+    
+    // Cerrar el diálogo después de 10 segundos (tiempo suficiente para que el navegador maneje la descarga)
+    setTimeout(() => {
+      this.showReportGeneratingDialog.set(false);
+    }, 10000);
+  }
+
+  onAreaUnitChanged(unit: 'm2' | 'ha'): void {
+    this.selectedAreaUnit = unit;
+  }
+
+  onVisualizationTypeChanged(type: 'mask' | 'original'): void {
+    this.visualizationType.set(type);
+    
+    // Obtener el período activo actual
+    const activeMonthLabel = this.months.find(m => m.id === this.activeMonth)?.label || 'Período seleccionado';
+    
+    // Mostrar diálogo de carga
+    const title = type === 'mask' ? 'Cargando Máscaras' : 'Cargando Imágenes Originales';
+    this.visualizationLoadingTitle.set(title);
+    this.visualizationLoadingMessage.set(activeMonthLabel);
+    this.showVisualizationLoadingDialog.set(true);
+    
+    // Cerrar el diálogo después de 10 segundos
+    setTimeout(() => {
+      this.showVisualizationLoadingDialog.set(false);
+    }, 10000);
+  }
+
+  onClassColorChanged(event: { className: string; color: string }): void {
+    // Cuando el usuario cambia un color de clase, recargar las máscaras para que usen el nuevo color
+    if (this.selectedPeriodo && this.selectedRegionId) {
+      // Mostrar diálogo de carga por 3 segundos
+      this.showMaskLoadingDialog.set(true);
+      setTimeout(() => {
+        this.showMaskLoadingDialog.set(false);
+      }, 3000);
+      
+      // Recargar las máscaras con los nuevos colores en el leaflet-map
+      if (this.leafletMap) {
+        this.leafletMap.reloadMasks();
+      }
     }
   }
 }

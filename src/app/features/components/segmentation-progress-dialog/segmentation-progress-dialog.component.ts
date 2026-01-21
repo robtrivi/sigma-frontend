@@ -1,8 +1,9 @@
-import { Component, Input, Output, EventEmitter, signal, computed, OnInit, OnDestroy, AfterViewInit, effect } from '@angular/core';
+import { Component, Input, Output, EventEmitter, signal, computed, OnInit, OnDestroy, AfterViewInit, effect, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { environment } from '../../../../environments/environment';
+import { NoThousandSeparatorPipe } from '../../pipes/no-thousand-separator.pipe';
 
 interface ProgressStep {
   name: string;
@@ -25,7 +26,7 @@ interface SegmentationProgress {
 @Component({
   selector: 'app-segmentation-progress-dialog',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, NoThousandSeparatorPipe],
   templateUrl: './segmentation-progress-dialog.component.html',
   styleUrls: ['./segmentation-progress-dialog.component.scss'],
   animations: [
@@ -51,7 +52,8 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
   private startTime: number = 0;
   private timerInterval: any = null;
   private pollingInterval: any = null;
-  private pollingIntervalMs = 1000; // Poll every 1 second
+  private pollingIntervalMs = 500; // ✅ Aggressive polling: 500ms at start (reduced from 1000ms)
+  private isCompleted = false; // ✅ Flag to freeze timer when completed
 
   progressPercentage = computed(() => {
     const prog = this.progress();
@@ -87,15 +89,16 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
     return prog?.status === 'error';
   });
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private destroyRef: DestroyRef) {
     // Effect para monitorear cambios en el progreso y detener el timer cuando se complete
     effect(() => {
       const prog = this.progress();
       if (prog && (prog.status === 'completed' || prog.status === 'error')) {
+        this.isCompleted = true; // ✅ Set flag to freeze timer
         this.stopPolling();
         this.stopTimer();
       }
-    });
+    }, { injector: undefined });
   }
 
   ngOnInit(): void {
@@ -189,8 +192,11 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
   private startTimer(): void {
     this.startTime = Date.now();
     this.timerInterval = setInterval(() => {
-      const elapsed = (Date.now() - this.startTime) / 1000;
-      this.elapsedSeconds.set(elapsed);
+      // ✅ Don't update elapsed time if processing is completed
+      if (!this.isCompleted) {
+        const elapsed = (Date.now() - this.startTime) / 1000;
+        this.elapsedSeconds.set(elapsed);
+      }
     }, 100);
   }
 
@@ -212,7 +218,18 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
     this.sceneId.set(sceneId);
     this.progress.set(null);
     this.elapsedSeconds.set(0);
+    this.isCompleted = false; // ✅ Reset completion flag
     this.startTimer();
+    
+    // ✅ Aggressive polling at start
+    this.pollingIntervalMs = 500;
     this.startPolling();
+    
+    // ✅ Reduce polling frequency after 10 seconds
+    setTimeout(() => {
+      this.pollingIntervalMs = 1000;
+      this.stopPolling();
+      this.startPolling();
+    }, 10000);
   }
 }

@@ -7,6 +7,7 @@ import { CLASS_CATALOG } from '../../models/class-catalog';
 import { environment } from '../../../../environments/environment';
 import proj4 from 'proj4';
 import { SegmentsService } from '../../services/segments.service';
+import { ClassColorService } from '../../services/class-color.service';
 
 @Component({
   selector: 'app-leaflet-map',
@@ -102,8 +103,9 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   @Input() selectedClassIds: string[] = []; // Clases seleccionadas para filtrar máscara
   @Input() regionId?: string; // Para cargar múltiples máscaras del período
   @Input() periodo?: string; // Período para cargar múltiples máscaras
+  @Input() visualizationType: 'mask' | 'original' = 'mask'; // Tipo de visualización: máscara o imagen original
   @Output() featureClick = new EventEmitter<SegmentFeature>();
-  @Output() multipeMasksLoaded = new EventEmitter<{ regionId: string; periodo: string; maskImages: string[] }>();
+  @Output() multipeMasksLoaded = new EventEmitter<{ regionId: string; periodo: string; maskImages: string[]; maskMetadata?: any[] }>();
   @Output() maskLoaded = new EventEmitter<string>();  // Emite cuando se carga la máscara
 
   private map!: L.Map;
@@ -112,6 +114,10 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   currentMaskImageUrl: string = '';  // URL de la máscara actual (para reportes)
   classTypes = CLASS_CATALOG.filter(c => c.id !== 'unlabeled');  // Excluir "Sin etiqueta"
   
+  // Metadatos de máscaras múltiples para cargar imágenes originales
+  private multiMaskMetadata: Array<{ sceneId: string; bounds: L.LatLngBoundsExpression }> = [];
+  private originalImageLayers: L.Layer[] = []; // Capas de imágenes originales para múltiples máscaras
+  
   // Control de máscara
   showMask: boolean = true;  
   maskOpacity: number = 1.0;
@@ -119,8 +125,13 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   private lastLoadedClasses: string = '';
   private lastMultipleMaskClasses: string = ''; // Track últimas clases usadas para máscaras múltiples
   private isLoadingMask: boolean = false;
+  private originalImageLayer?: L.Layer;  // Capa para la imagen original (escena individual)
+  private originalImageUrl: string = '';  // URL de la imagen original
 
-  constructor(private segmentsService: SegmentsService) {}
+  constructor(
+    private segmentsService: SegmentsService,
+    private classColorService: ClassColorService
+  ) {}
 
   ngOnInit(): void {
     if (typeof window !== 'undefined') {
@@ -158,6 +169,21 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     // Si no hay map aún, no hacer nada
     if (!this.map) {
       return;
+    }
+
+    // Cambiar visualización entre máscara e imagen original
+    // Funciona tanto para escenas individuales como para múltiples máscaras
+    if (changes['visualizationType']) {
+      // Para escena individual (sceneId sin período)
+      if (this.sceneId && !this.periodo) {
+        this.updateVisualization();
+        return;
+      }
+      // Para múltiples máscaras (periodo + regionId)
+      if (this.periodo && this.regionId) {
+        this.updateMultipleMasksVisualization();
+        return;
+      }
     }
 
     // Cargar múltiples máscaras cuando cambia el período o regionId
@@ -302,12 +328,9 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
           });
           this.maskCenteredOnce = true;
         }
-      } else {
-        console.warn('[LeafletMap] No se recibió imagen base64');
       }
 
     } catch (error) {
-      console.error('[LeafletMap] Error cargando máscara:', error);
     } finally {
       this.isLoadingMask = false;
     }
@@ -320,6 +343,151 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     }
   }
 
+  private clearOriginalImage(): void {
+    if (this.originalImageLayer) {
+      this.map.removeLayer(this.originalImageLayer);
+      this.originalImageLayer = undefined;
+    }
+  }
+
+  private async loadOriginalImage(): Promise<void> {
+    if (!this.sceneId) return;
+
+    try {
+      // Construir URL para obtener la imagen original (scene.tif)
+      const imageUrl = `${environment.apiBaseUrl}/api/v1/scenes/${this.sceneId}/original-image`;
+
+      // Obtener información de la imagen
+      const infoResponse = await fetch(`${environment.apiBaseUrl}/api/v1/scenes/${this.sceneId}/image-info`);
+      if (!infoResponse.ok) {
+        return;
+      }
+
+      const imageInfo = await infoResponse.json();
+
+      // Extraer información de georeferenciación
+      const bounds: L.LatLngBoundsExpression = this._convertBounds(
+        imageInfo.bounds,
+        imageInfo.crs
+      );
+
+      // Crear ImageOverlay con la imagen original
+      this.originalImageUrl = imageUrl;
+      this.originalImageLayer = L.imageOverlay(imageUrl, bounds, {
+        opacity: this.maskOpacity,
+        interactive: false
+      });
+
+      this.originalImageLayer.addTo(this.map);
+
+      // Centrar en la imagen solo la primera vez
+      if (!this.maskCenteredOnce) {
+        this.map.fitBounds(bounds, { padding: [50, 50] });
+        this.map.once('moveend', () => {
+          this.map.panBy([0, 400], { animate: false });
+        });
+        this.maskCenteredOnce = true;
+      }
+    } catch (error) {
+    }
+  }
+
+  private async loadOriginalImagesForMultipleMasks(): Promise<void> {
+    if (!this.multiMaskMetadata || this.multiMaskMetadata.length === 0) {
+      return;
+    }
+
+    try {
+      // Crear primero todas las capas sin añadirlas al mapa
+      const layersToAdd: L.ImageOverlay[] = [];
+      
+      const loadPromises = this.multiMaskMetadata.map(async (metadata) => {
+        try {
+          const imageUrl = `${environment.apiBaseUrl}/api/v1/scenes/${metadata.sceneId}/original-image`;
+          
+          const layer = L.imageOverlay(imageUrl, metadata.bounds, {
+            opacity: this.maskOpacity,
+            interactive: false
+          });
+
+          layersToAdd.push(layer);
+        } catch (error) {
+        }
+      });
+
+      await Promise.all(loadPromises);
+
+      // Limpiar las máscaras antes de añadir las imágenes originales
+      this.clearMultipleMasks();
+      
+      // Ahora añadir todas las imágenes originales al mapa
+      layersToAdd.forEach(layer => {
+        this.originalImageLayers.push(layer);
+        layer.addTo(this.map);
+      });
+
+      // Centrar en todas las imágenes la primera vez
+      if (!this.maskCenteredOnce && this.originalImageLayers.length > 0) {
+        const group = new L.FeatureGroup(this.originalImageLayers);
+        this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
+        this.map.once('moveend', () => {
+          this.map.panBy([0, 400], { animate: false });
+        });
+        this.maskCenteredOnce = true;
+      }
+    } catch (error) {
+    }
+  }
+
+  private updateVisualization(): void {
+    if (this.visualizationType === 'mask') {
+      // Mostrar máscara
+      this.clearOriginalImage();
+      if (!this.maskLayer) {
+        this.loadMaskLayer();
+      } else {
+        this.maskLayer.addTo(this.map);
+      }
+    } else {
+      // Mostrar imagen original
+      this.clearSingleMask();
+      if (!this.originalImageLayer) {
+        this.loadOriginalImage();
+      } else {
+        this.originalImageLayer.addTo(this.map);
+      }
+    }
+  }
+
+  private updateMultipleMasksVisualization(): void {
+    if (this.visualizationType === 'mask') {
+      // Mostrar múltiples máscaras
+      this.clearOriginalImagesMultiple();
+      // Si ya están cargadas, solo mostrar; si no, cargar
+      if (this.maskLayers.length === 0) {
+        this.loadMasksForPeriod();
+      } else {
+        this.maskLayers.forEach(layer => {
+          if (!this.map.hasLayer(layer)) {
+            layer.addTo(this.map);
+          }
+        });
+      }
+    } else {
+      // Mostrar imágenes originales de todas las máscaras
+      this.clearMultipleMasks();
+      if (this.originalImageLayers.length === 0 && this.multiMaskMetadata.length > 0) {
+        this.loadOriginalImagesForMultipleMasks();
+      } else {
+        this.originalImageLayers.forEach(layer => {
+          if (!this.map.hasLayer(layer)) {
+            layer.addTo(this.map);
+          }
+        });
+      }
+    }
+  }
+
   private clearMultipleMasks(): void {
     this.maskLayers.forEach(layer => {
       if (this.map.hasLayer(layer)) {
@@ -327,6 +495,20 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       }
     });
     this.maskLayers = [];
+  }
+
+  private clearOriginalImagesMultiple(): void {
+    this.originalImageLayers.forEach(layer => {
+      if (this.map.hasLayer(layer)) {
+        this.map.removeLayer(layer);
+      }
+    });
+    this.originalImageLayers = [];
+  }
+
+  // Método público para forzar recarga de máscaras (usado cuando cambian colores)
+  public reloadMasks(): void {
+    this.loadMasksForPeriod();
   }
 
   private loadMasksForPeriod(): void {
@@ -345,19 +527,21 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         ? this.selectedClassIds 
         : this.classTypes.map(c => c.id);  // Todas las clases del UI (ya sin unlabeled)
       
-      // Pasar clases al servicio
-      this.segmentsService.getMasksForPeriod(this.regionId, this.periodo, classesToShow).subscribe({
+      // Pasar clases al servicio y colores personalizados si existen
+      const customColors = this.classColorService.getAllColors();
+      this.segmentsService.getMasksForPeriod(this.regionId, this.periodo, classesToShow, customColors).subscribe({
         next: (response: any) => {
           const masks = response.masks || [];
           
           if (masks.length === 0) {
-            console.warn('[LeafletMap] No masks found for period');
             this.isLoadingMask = false;
             return;
           }
 
           // Limpiar capas anteriores
           this.clearMultipleMasks();
+          this.clearOriginalImagesMultiple();
+          this.multiMaskMetadata = []; // Limpiar metadatos anteriores
 
           const allBounds: L.LatLngBoundsExpression[] = [];
 
@@ -368,6 +552,11 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
               const bounds = this._convertBounds(maskData.bounds, maskData.crs);
               
               if (maskData.image) {
+                // Guardar metadatos para cargar imágenes originales después
+                if (maskData.sceneId) {
+                  this.multiMaskMetadata.push({ sceneId: maskData.sceneId, bounds });
+                }
+                
                 // Guardar la primera máscara para reportes
                 if (index === 0) {
                   this.currentMaskImageUrl = maskData.image;
@@ -387,7 +576,6 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
                 allBounds.push(bounds);
               }
             } catch (error) {
-              console.warn(`[LeafletMap] Error loading mask ${index}:`, error);
             }
           });
 
@@ -407,18 +595,28 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
           
           // Emitir evento para que el componente padre cargue píxeles agregados
           if (this.regionId && this.periodo) {
-            this.multipeMasksLoaded.emit({ regionId: this.regionId, periodo: this.periodo, maskImages });
+            this.multipeMasksLoaded.emit({ 
+              regionId: this.regionId, 
+              periodo: this.periodo, 
+              maskImages,
+              maskMetadata: masks // Pasar los metadatos completos de las máscaras
+            });
+          }
+          
+          // Si la visualización debe ser "original", cargar las imágenes originales
+          if (this.visualizationType === 'original' && this.multiMaskMetadata.length > 0) {
+            setTimeout(() => {
+              this.updateMultipleMasksVisualization();
+            }, 300);
           }
         },
         error: (error: any) => {
-          console.error('[LeafletMap] Error loading masks for period:', error);
         },
         complete: () => {
           this.isLoadingMask = false;
         }
       });
     } catch (error) {
-      console.error('[LeafletMap] Error in loadMasksForPeriod:', error);
       this.isLoadingMask = false;
     }
   }
@@ -450,7 +648,6 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         [maxXY[1], maxXY[0]]
       ];
     } catch (error) {
-      console.warn('[LeafletMap] Error en conversión, usando bounds originales:', error);
       return [
         [boundsObj.minY, boundsObj.minX],
         [boundsObj.maxY, boundsObj.maxX]

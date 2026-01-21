@@ -33,12 +33,14 @@ export interface ReportOptions {
   multipleMasks?: MaskData[];  // Array de máscaras para modo múltiple
   isMultipleMasks?: boolean;  // Flag indicando si es modo múltiples máscaras
   multiPeriodData?: PeriodReportData[];  // Array de datos por período para reportes multi-período
+  areaUnit?: 'm2' | 'ha';  // Unidad de área seleccionada por el usuario
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class ReportGeneratorService {
+  private readonly M2_TO_HA = 0.0001; // Conversión: 1 m² = 0.0001 ha
 
   generateReport(options: ReportOptions): void {
     if (options.format === 'pdf') {
@@ -46,6 +48,35 @@ export class ReportGeneratorService {
     } else {
       this.generateCSV(options);
     }
+  }
+
+  private convertArea(areaM2: number, unit: 'm2' | 'ha' = 'm2'): number {
+    if (unit === 'ha') {
+      return areaM2 * this.M2_TO_HA;
+    }
+    return areaM2;
+  }
+
+  private getAreaUnitLabel(unit: 'm2' | 'ha' = 'm2'): string {
+    return unit === 'm2' ? 'm²' : 'ha';
+  }
+
+  private formatCaptureDate(dateString?: string): string {
+    if (!dateString) {
+      return 'Fecha desconocida';
+    }
+    
+    // Parsear la fecha en formato YYYY-MM-DD sin considerar zona horaria
+    const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const year = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10);
+      const day = parseInt(match[3], 10);
+      // Formato: D/M/YYYY
+      return `${day}/${month}/${year}`;
+    }
+    
+    return 'Fecha desconocida';
   }
 
   private generatePDF(options: ReportOptions): void {
@@ -321,11 +352,13 @@ export class ReportGeneratorService {
     if (options.content.includes('stats')) {
       let statsContent = '';
       if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
-        const totalArea = options.totalAreaM2 || 0;
+        const areaUnit = options.areaUnit || 'm2';
+        const unitLabel = this.getAreaUnitLabel(areaUnit);
+        const totalArea = this.convertArea(options.totalAreaM2 || 0, areaUnit);
         const greenPercentage = options.vegetationCoveragePercentage || 0;
-        const vegetationArea = options.vegetationAreaM2 || 0;
+        const vegetationArea = this.convertArea(options.vegetationAreaM2 || 0, areaUnit);
         const totalClassCount = options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta').length;
-        statsContent = `<div class="section"><div class="section-title">Estadísticas de Cobertura</div><div class="stats-grid"><div class="stat-card"><div class="stat-label">Área Total (m²)</div><div class="stat-value">${totalArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Cobertura Verde</div><div class="stat-value">${greenPercentage.toFixed(2)}%</div></div><div class="stat-card"><div class="stat-label">Áreas Verdes (m²)</div><div class="stat-value">${vegetationArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Total de Clases</div><div class="stat-value">${totalClassCount}</div></div></div></div>`;
+        statsContent = `<div class="section"><div class="section-title">Estadísticas de Cobertura</div><div class="stats-grid"><div class="stat-card"><div class="stat-label">Área Total (${unitLabel})</div><div class="stat-value">${totalArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Cobertura Verde</div><div class="stat-value">${greenPercentage.toFixed(2)}%</div></div><div class="stat-card"><div class="stat-label">Áreas Verdes (${unitLabel})</div><div class="stat-value">${vegetationArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Total de Clases</div><div class="stat-value">${totalClassCount}</div></div></div></div>`;
       }
       content += statsContent;
     }
@@ -336,12 +369,16 @@ export class ReportGeneratorService {
       if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
         const dataToDisplay = options.filteredPixelCoverageData && options.filteredPixelCoverageData.length > 0 ? options.filteredPixelCoverageData : options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
         const totalAreaFiltered = dataToDisplay.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+        const areaUnit = options.areaUnit || 'm2';
+        const displayTotalArea = this.convertArea(totalAreaFiltered, areaUnit);
+        const unitLabel = this.getAreaUnitLabel(areaUnit);
         const sortedData = [...dataToDisplay].sort((a, b) => (b.area_m2 || 0) - (a.area_m2 || 0));
-        classesContent = `<div class="section"><div class="section-title">Cobertura de Área (m²)</div><div style="margin-top: 15px;"><div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 2px solid #f0f0f0; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #2d5016;"><span>Área total (m²):</span><span>${totalAreaFiltered.toFixed(2)}</span></div></div><table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;"><thead><tr style="background-color: #f5f5f5;"><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 30px;">Color</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 110px;">Clase</th><th style="padding: 8px 4px; text-align: right; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 60px;">Área (m²)</th><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 65px;">Cobertura (%)</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 140px;">Visualización</th></tr></thead><tbody>`;
+        classesContent = `<div class="section"><div class="section-title">Cobertura de Área (${unitLabel})</div><div style="margin-top: 15px;"><div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 2px solid #f0f0f0; margin-bottom: 10px; font-size: 14px; font-weight: 600; color: #2d5016;"><span>Área total (${unitLabel}):</span><span>${displayTotalArea.toFixed(2)}</span></div></div><table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;"><thead><tr style="background-color: #f5f5f5;"><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 30px;">Color</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 110px;">Clase</th><th style="padding: 8px 4px; text-align: right; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 60px;">Área (${unitLabel})</th><th style="padding: 8px 4px; text-align: center; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 65px;">Cobertura (%)</th><th style="padding: 8px 6px; text-align: left; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; width: 140px;">Visualización</th></tr></thead><tbody>`;
         sortedData.forEach(item => {
           const percentage = totalAreaFiltered > 0 ? ((item.area_m2 || 0) / totalAreaFiltered * 100).toFixed(2) : '0.00';
           const classColor = this.getColorForClass(item.class_name);
-          classesContent += `<tr style="border-bottom: 1px solid #f0f0f0;"><td style="padding: 8px 4px; text-align: center;"><div style="width: 20px; height: 20px; border-radius: 3px; background-color: ${classColor}; border: 1px solid #ccc; display: inline-block; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></td><td style="padding: 8px 6px; font-size: 12px;">${item.class_name}</td><td style="padding: 8px 4px; text-align: right; font-size: 12px;">${(item.area_m2 || 0).toFixed(2)}</td><td style="padding: 8px 4px; text-align: center; font-weight: 600; color: #2d5016; font-size: 12px;">${percentage}%</td><td style="padding: 8px 6px;"><div style="width: 100%; height: 16px; background-color: #f0f0f0; border-radius: 2px; overflow: hidden; border: 1px solid #ddd; print-color-adjust: exact; -webkit-print-color-adjust: exact;"><div style="height: 100%; width: ${percentage}%; background-color: ${classColor}; border-radius: 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></div></td></tr>`;
+          const displayArea = this.convertArea(item.area_m2 || 0, areaUnit);
+          classesContent += `<tr style="border-bottom: 1px solid #f0f0f0;"><td style="padding: 8px 4px; text-align: center;"><div style="width: 20px; height: 20px; border-radius: 3px; background-color: ${classColor}; border: 1px solid #ccc; display: inline-block; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></td><td style="padding: 8px 6px; font-size: 12px;">${item.class_name}</td><td style="padding: 8px 4px; text-align: right; font-size: 12px;">${displayArea.toFixed(2)}</td><td style="padding: 8px 4px; text-align: center; font-weight: 600; color: #2d5016; font-size: 12px;">${percentage}%</td><td style="padding: 8px 6px;"><div style="width: 100%; height: 16px; background-color: #f0f0f0; border-radius: 2px; overflow: hidden; border: 1px solid #ddd; print-color-adjust: exact; -webkit-print-color-adjust: exact;"><div style="height: 100%; width: ${percentage}%; background-color: ${classColor}; border-radius: 2px; print-color-adjust: exact; -webkit-print-color-adjust: exact;"></div></div></td></tr>`;
         });
         classesContent += `</tbody></table></div>`;
       }
@@ -360,7 +397,8 @@ export class ReportGeneratorService {
       if (options.isMultipleMasks && options.multipleMasks && options.multipleMasks.length > 0) {
         mapContent = `<div class="section" style="page-break-inside: avoid;"><div class="section-title">Mapas Segmentados de Múltiples Escenas</div><p style="font-size: 12px; color: #666; margin-bottom: 15px;">Se muestran las imágenes de segmentación de las ${options.multipleMasks.length} escena(s) analizadas en el período seleccionado:</p>`;
         options.multipleMasks.forEach((mask, index) => {
-          mapContent += `<div style="margin-bottom: 20px; page-break-inside: avoid;"><h3 style="font-size: 13px; font-weight: 600; color: #2d5016; margin-bottom: 8px;">Escena ${index + 1}</h3><div style="text-align: center; margin: 15px 0;"><img src="${mask.imageUrl}" style="max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 6px; display: block; margin: 0 auto;"></div><p style="font-size: 11px; color: #999; text-align: center; margin-top: 8px;">Segmentación de ${mask.sceneId}</p></div>`;
+          const captureDate = this.formatCaptureDate(mask.captureDate);
+          mapContent += `<div style="margin-bottom: 20px; page-break-inside: avoid;"><h3 style="font-size: 13px; font-weight: 600; color: #2d5016; margin-bottom: 8px;">Escena ${index + 1}</h3><div style="text-align: center; margin: 15px 0;"><img src="${mask.imageUrl}" style="max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 6px; display: block; margin: 0 auto;"></div><p style="font-size: 11px; color: #999; text-align: center; margin-top: 8px;">Fecha de Captura: ${captureDate}</p></div>`;
         });
         mapContent += `</div>`;
       } else if (options.maskImageUrl && options.maskImageUrl.trim() !== '') {
@@ -441,11 +479,15 @@ export class ReportGeneratorService {
       csv += 'ESTADÍSTICAS DE COBERTURA\n';
       
       if (options.pixelCoverageData && options.pixelCoverageData.length > 0) {
+        const areaUnit = options.areaUnit || 'm2';
+        const unitLabel = this.getAreaUnitLabel(areaUnit);
         const totalPixels = options.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
         const totalClassCount = options.pixelCoverageData.filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta').length;
-        csv += 'Área Total (m²),' + (options.totalAreaM2 || 0).toFixed(2) + '\n';
+        const totalArea = this.convertArea(options.totalAreaM2 || 0, areaUnit);
+        const vegetationArea = this.convertArea(options.vegetationAreaM2 || 0, areaUnit);
+        csv += `Área Total (${unitLabel}),` + totalArea.toFixed(2) + '\n';
         csv += 'Cobertura Verde,' + (options.vegetationCoveragePercentage || 0).toFixed(2) + '%\n';
-        csv += 'Áreas Verdes (m²),' + (options.vegetationAreaM2 || 0).toFixed(2) + '\n';
+        csv += `Áreas Verdes (${unitLabel}),` + vegetationArea.toFixed(2) + '\n';
         csv += 'Total de Clases,' + totalClassCount + '\n';
       }
       csv += '\n';

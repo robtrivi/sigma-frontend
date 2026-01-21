@@ -1,0 +1,7 @@
+<div class="loading-overlay" *ngIf="isVisible()" @fadeInOut>
+  <div class="loading-dialog">
+    <div class="spinner"></div>
+    <h2>{{ title() }}</h2>
+    <p *ngIf="message()">{{ message() }}</p>
+  </div>
+</div>

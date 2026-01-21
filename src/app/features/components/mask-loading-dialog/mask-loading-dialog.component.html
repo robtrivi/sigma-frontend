@@ -1,0 +1,7 @@
+<div class="mask-loading-overlay" *ngIf="isVisible()" @fadeInOut>
+  <div class="mask-loading-dialog">
+    <div class="spinner"></div>
+    <h2>{{ getTitle() }}</h2>
+    <p *ngIf="periodLabel()">{{ periodLabel() }}</p>
+  </div>
+</div>

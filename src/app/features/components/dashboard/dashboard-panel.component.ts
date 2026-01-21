@@ -1,13 +1,16 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges, signal, Output, EventEmitter } from '@angular/core';
 import { SegmentsService } from '../../services/segments.service';
+import { ClassColorService } from '../../services/class-color.service';
+import { ClassColorPickerComponent } from '../class-color-picker/class-color-picker.component';
 import { PixelCoverageItem } from '../../models/api.models';
 import { getClassColor } from '../../models/class-catalog';
+import { NoThousandSeparatorPipe } from '../../pipes/no-thousand-separator.pipe';
 
 @Component({
   selector: 'app-dashboard-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, NoThousandSeparatorPipe, ClassColorPickerComponent],
   templateUrl: './dashboard-panel.component.html',
   styleUrls: ['./dashboard-panel.component.scss']
 })
@@ -31,6 +34,16 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   @Input() totalPixelsInput: number = 0; // Total de píxeles del componente padre
   @Input() totalAreaM2Input: number = 0; // Área total en m² del componente padre
   
+  @Output() areaUnitChanged = new EventEmitter<'m2' | 'ha'>();
+  @Output() visualizationTypeChanged = new EventEmitter<'mask' | 'original'>();
+  @Output() classColorChanged = new EventEmitter<{ className: string; color: string }>();
+  
+  // ===== COLOR PICKER =====
+  showColorPicker: boolean = false;
+  selectedColorClass: string = '';
+  selectedColorValue: string = '';
+  originalClassColors: { className: string; color: string }[] = []; // Colores originales de todas las clases
+
   pixelCoverageData: PixelCoverageItem[] = [];
   filteredPixelCoverageData: PixelCoverageItem[] = [];
   totalPixels: number = 262144; // 512 * 512
@@ -41,8 +54,18 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   isLoadingCoverage: boolean = false;
   coverageError?: string;
   dataLoaded: boolean = false;  // Flag para rastrear si los datos han sido cargados
+  
+  // ===== UNIDADES DE ÁREA =====
+  areaUnit = signal<'m2' | 'ha'>('m2'); // 'm2' o 'ha'
+  readonly M2_TO_HA = 0.0001; // Conversión: 1 m² = 0.0001 ha
+  
+  // ===== TIPO DE VISUALIZACIÓN =====
+  visualizationType = signal<'mask' | 'original'>('mask'); // 'mask' o 'original'
 
-  constructor(private segmentsService: SegmentsService) {}
+  constructor(
+    private segmentsService: SegmentsService,
+    private classColorService: ClassColorService
+  ) {}
 
   ngOnInit(): void {
     if (this.sceneId) {
@@ -80,6 +103,11 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
 
   loadPixelCoverage(): void {
     if (!this.sceneId) return;
+
+    // Si ya tenemos datos del componente padre (máscaras agregadas), no cargar del API
+    if (this.pixelCoverageDataInput && this.pixelCoverageDataInput.length > 0) {
+      return;
+    }
 
     this.isLoadingCoverage = true;
     this.coverageError = undefined;
@@ -224,5 +252,84 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     
     // Usar la función getClassColor del catalog que tiene todos los colores correctos
     return getClassColor(classId);
+  }
+
+  // ===== CONVERSIÓN DE UNIDADES =====
+  toggleAreaUnit(): void {
+    this.areaUnit.update(current => current === 'm2' ? 'ha' : 'm2');
+    this.areaUnitChanged.emit(this.areaUnit());
+  }
+
+  convertArea(areaM2: number): number {
+    if (this.areaUnit() === 'ha') {
+      return areaM2 * this.M2_TO_HA;
+    }
+    return areaM2;
+  }
+
+  getAreaUnitLabel(): string {
+    return this.areaUnit() === 'm2' ? 'm²' : 'ha';
+  }
+
+  getAreaUnit(): 'm2' | 'ha' {
+    return this.areaUnit();
+  }
+
+  toggleVisualizationType(): void {
+    const newType = this.visualizationType() === 'mask' ? 'original' : 'mask';
+    this.visualizationType.set(newType);
+    this.visualizationTypeChanged.emit(newType);
+  }
+
+  getVisualizationTypeLabel(): string {
+    const label = this.visualizationType() === 'mask' ? 'Máscara' : 'Original';
+    return label;
+  }
+
+  // ===== MÉTODOS DE COLOR =====
+  getClassColor(className: string): string {
+    // Primero verificar si hay un color personalizado
+    const customColor = this.classColorService.getColor(className);
+    if (customColor) {
+      return customColor;
+    }
+    // Si no hay color personalizado, usar el color por defecto del catálogo (método existente)
+    return this.getColorForClass(className);
+  }
+
+  openColorPicker(className: string): void {
+    this.selectedColorClass = className;
+    this.selectedColorValue = this.getClassColor(className);
+    
+    // Construir lista de colores originales de TODAS las clases
+    this.originalClassColors = [];
+    if (this.pixelCoverageData && this.pixelCoverageData.length > 0) {
+      this.pixelCoverageData.forEach(item => {
+        if (item.class_name) {
+          const color = this.getColorForClass(item.class_name);
+          this.originalClassColors.push({
+            className: item.class_name,
+            color: color
+          });
+        }
+      });
+    }
+    
+    // Ordenar alfabéticamente por nombre de clase
+    this.originalClassColors.sort((a, b) => a.className.localeCompare(b.className));
+    
+    this.showColorPicker = true;
+  }
+
+  onColorSelected(color: string): void {
+    if (this.selectedColorClass) {
+      this.classColorService.setColor(this.selectedColorClass, color);
+      this.classColorChanged.emit({ className: this.selectedColorClass, color });
+    }
+    this.showColorPicker = false;
+  }
+
+  onColorPickerClose(): void {
+    this.showColorPicker = false;
   }
 }

@@ -58,6 +58,11 @@ export class ControlPanelComponent implements OnInit {
     this.loadRegions();
   }
 
+  // Getter para devolver las clases ordenadas alfabéticamente para el panel de control
+  get sortedClassTypes(): ClassType[] {
+    return [...this.classTypes].sort((a, b) => a.label.localeCompare(b.label));
+  }
+
   private loadRegions(): void {
     this.regionsLoading = true;
     this.regionsError = null;
@@ -217,5 +222,64 @@ export class ControlPanelComponent implements OnInit {
 
   notifyClassChange(): void {
     this.classFilterChange.emit();
+  }
+
+  selectAllClasses(): void {
+    this.classTypes.forEach(classType => classType.selected = true);
+    this.classFilterChange.emit();
+  }
+
+  deselectAllClasses(): void {
+    this.classTypes.forEach(classType => classType.selected = false);
+    this.classFilterChange.emit();
+  }
+
+  areAllClassesSelected(): boolean {
+    return this.classTypes.length > 0 && this.classTypes.every(ct => ct.selected);
+  }
+
+  areAnyClassesSelected(): boolean {
+    return this.classTypes.some(ct => ct.selected);
+  }
+
+  selectAllMonths(): void {
+    this.months.forEach(month => month.selected = true);
+    this.monthFilterChange.emit();
+  }
+
+  deselectAllMonths(): void {
+    this.months.forEach(month => month.selected = false);
+    // Marcar el período más reciente
+    const mostRecentMonth = this.findMostRecentMonth();
+    if (mostRecentMonth) {
+      mostRecentMonth.selected = true;
+    }
+    this.monthFilterChange.emit();
+  }
+
+  areAllMonthsSelected(): boolean {
+    return this.months.length > 0 && this.months.every(m => m.selected);
+  }
+
+  areAnyMonthsSelected(): boolean {
+    return this.months.some(m => m.selected);
+  }
+
+  private findMostRecentMonth(): MonthFilter | undefined {
+    if (this.months.length === 0) return undefined;
+    
+    return this.months.reduce((mostRecent, current) => {
+      const [currentYear, currentMonth] = current.id.split('-').map(Number);
+      const [recentYear, recentMonth] = mostRecent.id.split('-').map(Number);
+      
+      // Comparar primero por año, luego por mes
+      if (currentYear > recentYear) {
+        return current;
+      } else if (currentYear === recentYear && currentMonth > recentMonth) {
+        return current;
+      }
+      
+      return mostRecent;
+    });
   }
 }

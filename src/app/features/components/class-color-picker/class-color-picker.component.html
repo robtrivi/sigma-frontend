@@ -1,0 +1,47 @@
+<div class="color-picker-overlay" (click)="onClose()">
+  <div class="color-picker-modal" (click)="$event.stopPropagation()">
+    <div class="color-picker-header">
+      <h3>Seleccionar color para {{ className }}</h3>
+      <button class="close-btn" (click)="onClose()">×</button>
+    </div>
+
+    <div class="color-picker-content">
+      <!-- Input de color nativo -->
+      <div class="native-picker">
+        <label>Color personalizado:</label>
+        <input 
+          type="color" 
+          [(ngModel)]="selectedColor" 
+          (change)="onColorChange()"
+          class="color-input"
+        >
+        <span class="color-value">{{ selectedColor }}</span>
+      </div>
+
+      <!-- Colores genéricos (colores originales de otras clases) -->
+      <div class="generic-colors">
+        <label>Colores genéricos:</label>
+        <div class="color-grid">
+          <button 
+            *ngFor="let item of originalClassColors"
+            class="color-button"
+            [style.background-color]="item.color"
+            [class.selected]="selectedColor === item.color"
+            (click)="selectGenericColor(item.color)"
+            [title]="item.className"
+          ></button>
+        </div>
+      </div>
+
+      <div class="color-preview">
+        <label>Vista previa:</label>
+        <div class="preview-box" [style.background-color]="selectedColor"></div>
+      </div>
+    </div>
+
+    <div class="color-picker-footer">
+      <button class="btn-cancel" (click)="onClose()">Cancelar</button>
+      <button class="btn-confirm" (click)="onColorChange()">Confirmar</button>
+    </div>
+  </div>
+</div>
