@@ -23,6 +23,8 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   @Input({ required: true }) coverageLabel: string = '';
   @Input({ required: true }) coveragePercentage: number = 0;
   @Input() coverageAreaM2: number = 0;  // Área en metros cuadrados del elemento de cobertura
+  @Input() coveragePercentageForCategories: number = 0; // Porcentaje de cobertura en modo categorías (con datos completos)
+  @Input() coverageAreaM2ForCategories: number = 0; // Área de cobertura en modo categorías (con datos completos)
   @Input() selectedPeriodo: string = ''; // Período seleccionado
   
   // ===== COBERTURA POR PÍXELES =====
@@ -31,9 +33,12 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   @Input() imageResolution: string = '';
   @Input() selectedClassIds: string[] = []; // Clases seleccionadas para filtrado
   @Input() selectedClassesCount: number = 0; // Cantidad de clases seleccionadas
-  @Input() pixelCoverageDataInput: PixelCoverageItem[] = []; // Datos de cobertura del componente padre
+  @Input() pixelCoverageDataInput: PixelCoverageItem[] = []; // Datos de cobertura del componente padre (ya filtrados por clases)
   @Input() totalPixelsInput: number = 0; // Total de píxeles del componente padre
   @Input() totalAreaM2Input: number = 0; // Área total en m² del componente padre
+  @Input() pixelCoverageDataCompleteInput: PixelCoverageItem[] = []; // Datos de cobertura SIN filtrar por clases (para modo categorías)
+  @Input() totalPixelsCompleteInput: number = 0; // Total de píxeles completo (sin filtrar)
+  @Input() totalAreaM2CompleteInput: number = 0; // Área total completa en m² (sin filtrar)
   @Input() selectedCategoryIds: string[] = []; // Categorías seleccionadas en el panel de control
   
   @Output() areaUnitChanged = new EventEmitter<'m2' | 'ha'>();
@@ -55,6 +60,7 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   filteredPixelCoverageData: PixelCoverageItem[] = [];
   totalPixels: number = 262144; // 512 * 512
   totalAreaM2: number = 262144.0;  // Área total en m²
+  totalAreaM2Complete: number = 262144.0;  // Área total completa (sin filtrar por clases)
   pixelAreaM2: number = 1.0;  // Área por píxel en m²
   filteredTotalPixels: number = 262144;
   filteredTotalAreaM2: number = 262144.0;
@@ -111,6 +117,13 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
         this.filteredPixelCoverageData = [];
         this.categorizedCoverageData = [];
         this.dataLoaded = false;
+      }
+    }
+
+    // Cuando se reciben los datos completos (sin filtrar por clases)
+    if (changes['pixelCoverageDataCompleteInput'] && this.pixelCoverageDataCompleteInput !== undefined) {
+      if (this.pixelCoverageDataCompleteInput.length > 0) {
+        this.totalAreaM2Complete = this.totalAreaM2CompleteInput > 0 ? this.totalAreaM2CompleteInput : 262144.0;
       }
     }
     
@@ -372,7 +385,14 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     this.selectedColorCategory = categoryName;
     
     // Obtener el color actual personalizado de la categoría (si existe)
-    this.selectedCategoryColorValue = this.classColorService.getCategoryColor(categoryName) || '#000000';
+    // Si no existe, obtener el color original de COVERAGE_CATEGORIES
+    let categoryColor = this.classColorService.getCategoryColor(categoryName);
+    if (!categoryColor) {
+      // Buscar el color original de la categoría
+      const originalCategory = COVERAGE_CATEGORIES.find(cat => cat.name === categoryName);
+      categoryColor = originalCategory?.color || '#000000';
+    }
+    this.selectedCategoryColorValue = categoryColor;
     
     // Construir lista de colores originales de TODAS las categorías desde COVERAGE_CATEGORIES
     // Los colores originales NO deben cambiar aunque personalices el color
@@ -417,9 +437,19 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   }
 
   private updateCategorizedCoverageData(): void {
+    // Cuando se cambia a modo categorías, usar los datos COMPLETOS sin filtrar por clases individuales
+    // para mostrar información completa de todas las categorías
+    const dataForCategories = this.pixelCoverageDataCompleteInput.length > 0 
+      ? this.pixelCoverageDataCompleteInput 
+      : this.pixelCoverageData;
+    
+    const totalAreaForCategories = this.totalAreaM2CompleteInput > 0 
+      ? this.totalAreaM2CompleteInput 
+      : this.totalAreaM2;
+    
     const allCategorizedData = groupCoverageByCategory(
-      this.filteredPixelCoverageData,
-      this.filteredTotalAreaM2
+      dataForCategories,
+      totalAreaForCategories
     );
     
     // Filtrar solo las categorías que están seleccionadas en el panel de control

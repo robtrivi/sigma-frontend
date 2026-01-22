@@ -17,7 +17,7 @@
     <!-- Mostrar área total cuando hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="usePixelCoverage">
       <span class="stat-label">Área total ({{ getAreaUnitLabel() }}):</span>
-      <span class="stat-value large">{{ convertArea(filteredTotalAreaM2) | noThousandSeparator:'1.2-2' }}</span>
+      <span class="stat-value large">{{ convertArea(coverageViewMode() === 'categories' ? totalAreaM2Complete : filteredTotalAreaM2) | noThousandSeparator:'1.2-2' }}</span>
     </div>
     
     <!-- Mostrar conteo de celdas cuando NO hay cobertura por píxeles -->
@@ -29,7 +29,7 @@
     <!-- Mostrar información de clases cuando hay cobertura por píxeles -->
     <div class="card-stat" *ngIf="usePixelCoverage">
       <span class="stat-label">{{ coverageLabel }}:</span>
-      <span class="stat-value">{{ convertArea(coverageAreaM2) | noThousandSeparator:'1.2-2' }} {{ getAreaUnitLabel() }} ({{ coveragePercentage | noThousandSeparator:'1.2-2' }}%)</span>
+      <span class="stat-value">{{ convertArea(coverageViewMode() === 'categories' ? coverageAreaM2ForCategories : coverageAreaM2) | noThousandSeparator:'1.2-2' }} {{ getAreaUnitLabel() }} ({{ (coverageViewMode() === 'categories' ? coveragePercentageForCategories : coveragePercentage) | noThousandSeparator:'1.2-2' }}%)</span>
     </div>
 
     <div class="card-stat" *ngIf="usePixelCoverage && selectedPeriodo">

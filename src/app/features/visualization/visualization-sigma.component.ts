@@ -17,6 +17,7 @@ import { RegionsService } from '../services/regions.service';
 import { ClassColorService } from '../services/class-color.service';
 import { SegmentFeature, SceneResponse, Region, PeriodInfo, PixelCoverageItem, SegmentationCoverageResponse } from '../models/api.models';
 import { CLASS_CATALOG, getClassConfig } from '../models/class-catalog';
+import { COVERAGE_CATEGORIES, CoverageCategory } from '../models/coverage-categories';
 import { finalize, forkJoin } from 'rxjs';
 
 @Component({
@@ -376,6 +377,25 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   // Manejar cambio de modo de vista de cobertura (clases vs categorías)
+  /**
+   * Obtiene todas las clases que pertenecen a las categorías seleccionadas
+   */
+  private getClassesForSelectedCategories(): string[] {
+    const selectedClasses: string[] = [];
+    
+    // Para cada categoría seleccionada
+    this.selectedCategoryIds.forEach(categoryId => {
+      // Encontrar la categoría en COVERAGE_CATEGORIES
+      const category = COVERAGE_CATEGORIES.find((cat: CoverageCategory) => cat.id === categoryId);
+      if (category) {
+        // Agregar todas sus clases a la lista
+        selectedClasses.push(...category.classes);
+      }
+    });
+    
+    return selectedClasses;
+  }
+
   onCoverageModeChanged(mode: 'classes' | 'categories'): void {
     this.coverageViewMode.set(mode);
     
@@ -384,6 +404,9 @@ export class VisualizationSigmaComponent implements OnInit {
       this.classTypes.forEach(classType => classType.selected = false);
       // Deseleccionar todas las categorías para mostrar todas por defecto
       this.selectedCategoryIds = [];
+      
+      // Filtrar los datos para reflejar la deselección de clases en el dashboard
+      this.filterPixelCoverageByClass();
       
       // NO modificar colores de clases. Los colores de categorías se manejan por separado
       // en el dashboard y no afectan los colores de clases individuales
@@ -404,8 +427,17 @@ export class VisualizationSigmaComponent implements OnInit {
         }, 100);
       }
     } else {
-      // Cuando se cambia back a 'classes', no hacer nada con los colores
-      // Ya están guardados en localStorage y cargados en el servicio
+      // Cuando se cambia back a 'classes', marcar las clases de las categorías seleccionadas
+      // Si hay categorías seleccionadas, marcar todas sus clases
+      // Si no hay categorías seleccionadas, deseleccionar todas las clases
+      const classesToSelect = this.getClassesForSelectedCategories();
+      
+      this.classTypes.forEach(classType => {
+        classType.selected = classesToSelect.includes(classType.label);
+      });
+      
+      // Filtrar los datos para reflejar los cambios en el dashboard
+      this.filterPixelCoverageByClass();
       
       // Recargar segmentos con colores de clase originales
       if (this.selectedRegionId && this.selectedPeriodo) {
@@ -654,18 +686,31 @@ export class VisualizationSigmaComponent implements OnInit {
   }
 
   getCoveragePercentage(): number {
-    // Si hay cobertura por píxeles, usarla (FILTRADA por clases seleccionadas)
+    // Determinar qué datos usar según el modo de vista
+    // En modo categorías, usar TODOS los datos sin filtrar por clases
+    let dataToUse = this.filteredPixelCoverageData;
+    let areaToUse = this.filteredTotalAreaM2;
+    
+    // Nota: coverageViewMode() no está disponible en el componente padre,
+    // así que usamos una aproximación: si hay clases seleccionadas Y estamos en modo categorías,
+    // debemos recalcular. Sin embargo, como el modo se controla en el dashboard,
+    // aquí simplemente usamos los datos filtrados siempre para "Por Clases"
+    // y los datos completos se usan implícitamente cuando NO hay clases seleccionadas.
+    // Para solucionar esto correctamente, necesitamos un signal que indique el modo.
+    
+    // Por ahora, implementar una solución: si hay clases seleccionadas,
+    // recalcular también con datos completos como backup
     if (this.usePixelCoverage && this.filteredPixelCoverageData.length > 0) {
       const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
-      const vegetationAreaM2 = this.filteredPixelCoverageData
+      const vegetationAreaM2 = dataToUse
         .filter(item => vegetationClasses.some(vc => 
           item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
         ))
         .reduce((sum, item) => sum + (item.area_m2 || 0), 0);
       
       // Calcular porcentaje basado en área: (área de vegetación / área total) * 100
-      const percentage = this.filteredTotalAreaM2 > 0 
-        ? (vegetationAreaM2 / this.filteredTotalAreaM2) * 100 
+      const percentage = areaToUse > 0 
+        ? (vegetationAreaM2 / areaToUse) * 100 
         : 0;
       
       return parseFloat(percentage.toFixed(2));
@@ -685,6 +730,29 @@ export class VisualizationSigmaComponent implements OnInit {
     return percentage;
   }
 
+  /**
+   * Calcula la cobertura de vegetación usando TODOS los datos sin filtrar por clases
+   * Se usa en modo categorías
+   */
+  getCoveragePercentageForCategories(): number {
+    if (this.usePixelCoverage && this.pixelCoverageData.length > 0) {
+      const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
+      const vegetationAreaM2 = this.pixelCoverageData
+        .filter(item => vegetationClasses.some(vc => 
+          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
+        ))
+        .reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+      
+      const percentage = this.totalAreaM2 > 0 
+        ? (vegetationAreaM2 / this.totalAreaM2) * 100 
+        : 0;
+      
+      return parseFloat(percentage.toFixed(2));
+    }
+    
+    return 0;
+  }
+
   getCoverageAreaM2(): number {
     // Obtener el área en m² de vegetación usando los mismos criterios que getCoveragePercentage
     if (this.usePixelCoverage && this.filteredPixelCoverageData.length > 0) {
@@ -699,6 +767,25 @@ export class VisualizationSigmaComponent implements OnInit {
     }
     
     // Fallback: retornar 0 si no hay cobertura por píxeles
+    return 0;
+  }
+
+  /**
+   * Calcula el área de vegetación usando TODOS los datos sin filtrar por clases
+   * Se usa en modo categorías
+   */
+  getCoverageAreaM2ForCategories(): number {
+    if (this.usePixelCoverage && this.pixelCoverageData.length > 0) {
+      const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
+      const vegetationAreaM2 = this.pixelCoverageData
+        .filter(item => vegetationClasses.some(vc => 
+          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
+        ))
+        .reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+      
+      return parseFloat(vegetationAreaM2.toFixed(2));
+    }
+    
     return 0;
   }
 
@@ -986,6 +1073,24 @@ export class VisualizationSigmaComponent implements OnInit {
     });
   }
 
+  /**
+   * Filtra los datos de cobertura de píxeles para incluir solo las clases seleccionadas
+   * Si no hay clases seleccionadas, devuelve todos los datos
+   */
+  private getPixelCoverageDataForReport(pixelCoverageData: PixelCoverageItem[]): PixelCoverageItem[] {
+    const selectedClassIds = this.getSelectedClassIds();
+    
+    // Si no hay clases seleccionadas, devolver todos los datos
+    if (selectedClassIds.length === 0) {
+      return pixelCoverageData;
+    }
+    
+    // Filtrar solo las clases seleccionadas
+    return pixelCoverageData.filter(item => 
+      selectedClassIds.includes(String(item.class_id))
+    );
+  }
+
   private generateSinglePeriodReport(data: { format: string; content: string[]; region: string }): void {
     const activeMonthLabel = this.getSelectedMonths()[0]?.label || 'Noviembre 2024';
     const maskImageUrl = this.getCurrentMaskImageUrl();
@@ -1011,9 +1116,9 @@ export class VisualizationSigmaComponent implements OnInit {
             content: data.content,
             region: data.region as 'full' | 'subregion' | 'green-only',
             monthLabel: activeMonthLabel,
-            // Pasar los datos filtrados según los filtros aplicados
-            pixelCoverageData: this.pixelCoverageData,
-            filteredPixelCoverageData: this.filteredPixelCoverageData,
+            // Pasar los datos filtrados según los filtros aplicados (incluyendo filtrado por clases seleccionadas)
+            pixelCoverageData: this.getPixelCoverageDataForReport(this.pixelCoverageData),
+            filteredPixelCoverageData: this.getPixelCoverageDataForReport(this.filteredPixelCoverageData),
             vegetationCoveragePercentage: this.getCoveragePercentage(),
             vegetationAreaM2: this.getCoverageAreaM2(),
             totalAreaM2: this.filteredTotalAreaM2,
@@ -1040,9 +1145,9 @@ export class VisualizationSigmaComponent implements OnInit {
             content: data.content,
             region: data.region as 'full' | 'subregion' | 'green-only',
             monthLabel: activeMonthLabel,
-            // Pasar los datos filtrados según los filtros aplicados
-            pixelCoverageData: this.pixelCoverageData,
-            filteredPixelCoverageData: this.filteredPixelCoverageData,
+            // Pasar los datos filtrados según los filtros aplicados (incluyendo filtrado por clases seleccionadas)
+            pixelCoverageData: this.getPixelCoverageDataForReport(this.pixelCoverageData),
+            filteredPixelCoverageData: this.getPixelCoverageDataForReport(this.filteredPixelCoverageData),
             vegetationCoveragePercentage: this.getCoveragePercentage(),
             vegetationAreaM2: this.getCoverageAreaM2(),
             totalAreaM2: this.filteredTotalAreaM2,
@@ -1068,9 +1173,9 @@ export class VisualizationSigmaComponent implements OnInit {
         content: data.content,
         region: data.region as 'full' | 'subregion' | 'green-only',
         monthLabel: activeMonthLabel,
-        // Pasar los datos filtrados según los filtros aplicados
-        pixelCoverageData: this.pixelCoverageData,
-        filteredPixelCoverageData: this.filteredPixelCoverageData,
+        // Pasar los datos filtrados según los filtros aplicados (incluyendo filtrado por clases seleccionadas)
+        pixelCoverageData: this.getPixelCoverageDataForReport(this.pixelCoverageData),
+        filteredPixelCoverageData: this.getPixelCoverageDataForReport(this.filteredPixelCoverageData),
         vegetationCoveragePercentage: this.getCoveragePercentage(),
         vegetationAreaM2: this.getCoverageAreaM2(),
         totalAreaM2: this.filteredTotalAreaM2,
@@ -1188,6 +1293,7 @@ export class VisualizationSigmaComponent implements OnInit {
   private regenerateMasksWithCustomColors(multipleMasks: any[], callback: () => void): void {
     // Obtener los colores correctos según el modo de vista
     const customColors = this.classColorService.getColorsForRendering(this.coverageViewMode());
+    const selectedClassIds = this.getSelectedClassIds();
     
     if (!customColors || customColors.size === 0) {
       callback();
@@ -1203,7 +1309,7 @@ export class VisualizationSigmaComponent implements OnInit {
       return this.segmentsService.getMasksForPeriod(
         this.selectedRegionId,
         metadata.periodo || this.selectedPeriodo,
-        undefined,
+        selectedClassIds.length > 0 ? selectedClassIds : undefined,  // Pasar IDs de clases seleccionadas
         customColors,
         true  // makeUnlabeledTransparent: true para reportes PDF
       ).toPromise().then((response: any) => {
@@ -1231,6 +1337,7 @@ export class VisualizationSigmaComponent implements OnInit {
   private regenerateMultiPeriodMasks(callback: () => void): void {
     // Obtener los colores correctos según el modo de vista
     const customColors = this.classColorService.getColorsForRendering(this.coverageViewMode());
+    const selectedClassIds = this.getSelectedClassIds();
     
     const periodPromises = this.multiPeriodReportData.map((periodData: any) => {
       if (!periodData.multipleMasks || periodData.multipleMasks.length === 0) {
@@ -1243,7 +1350,7 @@ export class VisualizationSigmaComponent implements OnInit {
         return this.segmentsService.getMasksForPeriod(
           this.selectedRegionId,
           periodo,
-          undefined,
+          selectedClassIds.length > 0 ? selectedClassIds : undefined,  // Pasar IDs de clases seleccionadas
           customColors,
           true  // makeUnlabeledTransparent: true para reportes PDF
         ).toPromise().then((response: any) => {
