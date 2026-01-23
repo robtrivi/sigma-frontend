@@ -68,7 +68,7 @@ export function groupCoverageByCategory(
   const categoryMap = new Map<string, CoverageItemByCategory>();
 
   // Inicializar categorías
-  COVERAGE_CATEGORIES.forEach(category => {
+  for (const category of COVERAGE_CATEGORIES) {
     categoryMap.set(category.id, {
       categoryId: category.id,
       categoryName: category.name,
@@ -77,12 +77,18 @@ export function groupCoverageByCategory(
       percentageOfTotal: 0,
       classesInCategory: []
     });
-  });
+  }
 
   // Agrupar datos de cobertura
-  coverageData.forEach(item => {
-    const className = item.class_name;
-    const areaM2 = item.area_m2 || 0;
+  for (const item of coverageData) {
+    // Intentar obtener className con fallback a camelCase
+    const className = item.class_name || item.className;
+    const areaM2 = item.area_m2 || item.areaM2 || 0;
+
+    // Saltar si no hay nombre de clase
+    if (!className) {
+      continue;
+    }
 
     // Encontrar la categoría que contiene esta clase
     for (const category of COVERAGE_CATEGORIES) {
@@ -97,21 +103,21 @@ export function groupCoverageByCategory(
         break;
       }
     }
-  });
+  }
 
   // Calcular porcentajes
   const result: CoverageItemByCategory[] = [];
-  categoryMap.forEach(category => {
+  for (const category of categoryMap.values()) {
     category.percentageOfTotal = (category.totalAreaM2 / (totalAreaM2 || 1)) * 100;
 
     // Calcular porcentaje de cada clase dentro de su categoría
-    category.classesInCategory.forEach(item => {
+    for (const item of category.classesInCategory) {
       item.percentageOfCategory = (item.areaM2 / (category.totalAreaM2 || 1)) * 100;
-    });
+    }
 
     // Agregar TODAS las categorías, incluso las que no tienen datos (área = 0)
     result.push(category);
-  });
+  }
 
   return result;
 }

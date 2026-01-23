@@ -1,7 +1,6 @@
-import { Component, Input, Output, EventEmitter, signal, computed, OnInit, OnDestroy, AfterViewInit, effect, DestroyRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, signal, computed, OnDestroy, effect, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { trigger, transition, style, animate } from '@angular/animations';
 import { environment } from '../../../../environments/environment';
 import { NoThousandSeparatorPipe } from '../../pipes/no-thousand-separator.pipe';
 
@@ -28,24 +27,13 @@ interface SegmentationProgress {
   standalone: true,
   imports: [CommonModule, NoThousandSeparatorPipe],
   templateUrl: './segmentation-progress-dialog.component.html',
-  styleUrls: ['./segmentation-progress-dialog.component.scss'],
-  animations: [
-    trigger('fadeInOut', [
-      transition(':enter', [
-        style({ opacity: 0 }),
-        animate('300ms ease-in', style({ opacity: 1 }))
-      ]),
-      transition(':leave', [
-        animate('300ms ease-out', style({ opacity: 0 }))
-      ])
-    ])
-  ]
+  styleUrls: ['./segmentation-progress-dialog.component.scss']
 })
-export class SegmentationProgressDialogComponent implements OnInit, AfterViewInit, OnDestroy {
+export class SegmentationProgressDialogComponent implements OnDestroy {
   @Input() isVisible = signal(false);
   @Input() sceneId = signal<string | null>(null);
-  @Output() onClose = new EventEmitter<void>();
-  @Output() onVisualize = new EventEmitter<string>();
+  @Output() progressClosed = new EventEmitter<void>();
+  @Output() visualizeRequested = new EventEmitter<string>();
 
   progress = signal<SegmentationProgress | null>(null);
   elapsedSeconds = signal(0);
@@ -89,7 +77,7 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
     return prog?.status === 'error';
   });
 
-  constructor(private http: HttpClient, private destroyRef: DestroyRef) {
+  constructor(private readonly http: HttpClient, private readonly destroyRef: DestroyRef) {
     // Effect para monitorear cambios en el progreso y detener el timer cuando se complete
     effect(() => {
       const prog = this.progress();
@@ -101,17 +89,6 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
     }, { injector: undefined });
   }
 
-  ngOnInit(): void {
-    // Watch for visibility changes to connect/disconnect polling
-  }
-
-  ngAfterViewInit(): void {
-    // Setup initial subscription when component is ready
-  }
-
-  ngOnDestroy(): void {
-    this.stopPolling();
-  }
 
   private startPolling(): void {
     if (!this.sceneId()) return;
@@ -152,22 +129,26 @@ export class SegmentationProgressDialogComponent implements OnInit, AfterViewIni
     }
   }
 
+  ngOnDestroy(): void {
+    this.stopPolling();
+  }
+
   close(): void {
     this.stopTimer();
     this.stopPolling();
     this.progress.set(null);
-    this.onClose.emit();
+    this.progressClosed.emit();
     
     // Reload page when closing due to error
     if (this.isError()) {
-      window.location.reload();
+      globalThis.location.reload();
     }
   }
 
   visualizeMap(): void {
     const sceneId = this.sceneId();
     if (sceneId) {
-      this.onVisualize.emit(sceneId);
+      this.visualizeRequested.emit(sceneId);
     }
   }
 

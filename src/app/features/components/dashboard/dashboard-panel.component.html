@@ -3,7 +3,7 @@
     <div class="dashboard-card-header">
       <div class="dashboard-card-title"><i class="pi pi-chart-bar"></i> {{ dashboardTitle }}</div>
       <div class="header-buttons">
-        <button class="vis-toggle-btn" (click)="toggleVisualizationType()" [title]="'Visualización: ' + getVisualizationTypeLabel() + ' • Haz clic para cambiar'" *ngIf="sceneId">
+        <button class="vis-toggle-btn" (click)="toggleVisualizationType()" [title]="'Visualización: ' + getVisualizationTypeLabel() + ' • Haz clic para cambiar'" *ngIf="sceneId || (pixelCoverageDataInput && pixelCoverageDataInput.length > 0)">
           <i class="pi" [ngClass]="visualizationType() === 'mask' ? 'pi-image' : 'pi-camera'"></i>
           {{ getVisualizationTypeLabel() }}
         </button>
@@ -108,20 +108,22 @@
             <td class="color-cell">
               <div 
                 class="color-box" 
-                [style.background-color]="getClassColor(item.class_name)"
-                (click)="openColorPicker(item.class_name)"
+                [style.background-color]="getClassColor(item.className)"
+                (click)="openColorPicker(item.className)"
+                (keydown.enter)="openColorPicker(item.className)"
+                (keydown.space)="openColorPicker(item.className)"
                 title="Haz clic para cambiar el color"
               ></div>
             </td>
-            <td>{{ item.class_name }}</td>
-            <td class="area-m2">{{ convertArea(item.area_m2 || 0) | noThousandSeparator:'1.2-2' }}</td>
-            <td class="coverage-percentage">{{ ((item.area_m2 || 0) / (filteredTotalAreaM2 || 1) * 100).toFixed(2) }}%</td>
+            <td>{{ item.className }}</td>
+            <td class="area-m2">{{ convertArea(item.areaM2 || 0) | noThousandSeparator:'1.2-2' }}</td>
+            <td class="coverage-percentage">{{ ((item.areaM2 || 0) / (filteredTotalAreaM2 || 1) * 100).toFixed(2) }}%</td>
             <td class="coverage-bar">
               <div class="progress-bar-pixel">
                 <div
                   class="progress-fill-pixel"
-                  [style.width.%]="(item.area_m2 || 0) / (filteredTotalAreaM2 || 1) * 100"
-                  [style.background-color]="getClassColor(item.class_name)"
+                  [style.width.%]="(item.areaM2 || 0) / (filteredTotalAreaM2 || 1) * 100"
+                  [style.background-color]="getClassColor(item.className)"
                 ></div>
               </div>
             </td>
@@ -147,11 +149,13 @@
                 class="color-box" 
                 [style.background-color]="category.categoryColor"
                 (click)="openCategoryColorPicker(category.categoryName)"
+                (keydown.enter)="openCategoryColorPicker(category.categoryName)"
+                (keydown.space)="openCategoryColorPicker(category.categoryName)"
                 title="Haz clic para cambiar el color"
               ></div>
             </td>
             <td class="category-name">{{ category.categoryName }}</td>
-            <td class="area-m2">{{ convertAreaForCategory(category.totalAreaM2) | noThousandSeparator:'1.2-2' }}</td>
+            <td class="area-m2">{{ convertArea(category.totalAreaM2) | noThousandSeparator:'1.2-2' }}</td>
             <td class="coverage-percentage">{{ category.percentageOfTotal.toFixed(2) }}%</td>
             <td class="coverage-bar">
               <div class="progress-bar-pixel">
@@ -176,7 +180,7 @@
                 <div *ngFor="let classItem of category.classesInCategory" class="class-detail-row">
                   <span class="indent"></span>
                   <span class="detail-label">{{ classItem.className }}:</span>
-                  <span class="detail-value">{{ convertAreaForCategory(classItem.areaM2) | noThousandSeparator:'1.2-2' }} ({{ classItem.percentageOfCategory.toFixed(1) }}% de la categoría)</span>
+                  <span class="detail-value">{{ convertArea(classItem.areaM2) | noThousandSeparator:'1.2-2' }} ({{ classItem.percentageOfCategory.toFixed(1) }}% de la categoría)</span>
                 </div>
               </div>
             </td>
@@ -193,5 +197,5 @@
   [currentColor]="selectedColorClass ? selectedColorValue : selectedCategoryColorValue"
   [originalClassColors]="selectedColorClass ? originalClassColors : getMappedCategoryColors()"
   (colorSelected)="onColorSelected($event)"
-  (close)="onColorPickerClose()"
+  (pickerClosed)="onColorPickerClose()"
 ></app-class-color-picker>

@@ -10,7 +10,7 @@ import { Region } from '../models/api.models';
 export class RegionsService {
   private readonly apiUrl = `${environment.apiBaseUrl}/api/v1/regions`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private readonly http: HttpClient) {}
 
   getRegions(): Observable<Region[]> {
     return this.http.get<Region[]>(this.apiUrl);

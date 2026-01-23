@@ -121,7 +121,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   
   // Control de máscara
   showMask: boolean = true;  
-  maskOpacity: number = 1.0;
+  maskOpacity: number = 1;
   private maskCenteredOnce: boolean = false;
   private lastLoadedClasses: string = '';
   private lastMultipleMaskClasses: string | null = null; // Track últimas clases usadas para máscaras múltiples - iniciar como null para forzar carga inicial
@@ -130,12 +130,12 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
   private originalImageUrl: string = '';  // URL de la imagen original
 
   constructor(
-    private segmentsService: SegmentsService,
-    private classColorService: ClassColorService
+    private readonly segmentsService: SegmentsService,
+    private readonly classColorService: ClassColorService
   ) {}
 
   ngOnInit(): void {
-    if (typeof window !== 'undefined') {
+    if (globalThis?.document) {
       this.fixLeafletIconPaths();
     }
   }
@@ -166,62 +166,73 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     return this.currentMaskImageUrl;
   }
 
+  private handleVisualizationTypeChange(): void {
+    if (this.sceneId && !this.periodo) {
+      this.updateVisualization();
+    } else if (this.periodo && this.regionId) {
+      this.updateMultipleMasksVisualization();
+    }
+  }
+
+  private handlePeriodOrRegionChange(): void {
+    if (!(this.periodo && this.regionId)) {
+      return;
+    }
+
+    this.maskCenteredOnce = false;
+    this.lastLoadedClasses = '';
+    this.lastMultipleMaskClasses = null;
+    this.clearSingleMask();
+    this.clearMultipleMasks();
+    this.loadMasksForPeriod();
+  }
+
+  private handleSceneIdChange(): void {
+    if (!(this.sceneId && !this.periodo)) {
+      return;
+    }
+
+    this.maskCenteredOnce = false;
+    this.lastLoadedClasses = '';
+    this.clearMultipleMasks();
+    this.loadMaskLayer();
+  }
+
+  private handleSelectedClassIdsChange(): void {
+    const classesStr = (this.selectedClassIds || []).join(',');
+
+    if (this.sceneId && !this.periodo) {
+      if (classesStr !== this.lastLoadedClasses && !this.isLoadingMask) {
+        this.loadMaskLayer();
+      }
+    } else if (this.periodo && this.regionId && classesStr !== this.lastMultipleMaskClasses && !this.isLoadingMask) {
+      this.lastMultipleMaskClasses = classesStr;
+      this.loadMasksForPeriod();
+    }
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
-    // Si no hay map aún, no hacer nada
     if (!this.map) {
       return;
     }
 
-    // Cambiar visualización entre máscara e imagen original
-    // Funciona tanto para escenas individuales como para múltiples máscaras
     if (changes['visualizationType']) {
-      // Para escena individual (sceneId sin período)
-      if (this.sceneId && !this.periodo) {
-        this.updateVisualization();
-        return;
-      }
-      // Para múltiples máscaras (periodo + regionId)
-      if (this.periodo && this.regionId) {
-        this.updateMultipleMasksVisualization();
-        return;
-      }
+      this.handleVisualizationTypeChange();
+      return;
     }
 
-    // Cargar múltiples máscaras cuando cambia el período o regionId
-    if ((changes['periodo'] || changes['regionId']) && this.periodo && this.regionId) {
-      this.maskCenteredOnce = false;
-      this.lastLoadedClasses = '';
-      this.lastMultipleMaskClasses = null; // Reset para que las clases actuales se apliquen
-      this.clearSingleMask(); // Limpiar máscara individual si existe
-      this.clearMultipleMasks(); // Limpiar máscaras anteriores del período
-      this.loadMasksForPeriod();
-      return; // No procesar otros cambios
+    if (changes['periodo'] || changes['regionId']) {
+      this.handlePeriodOrRegionChange();
+      return;
     }
 
-    // Cargar máscara única cuando sceneId cambia (sin período)
-    if (changes['sceneId'] && this.sceneId && !this.periodo) {
-      this.maskCenteredOnce = false;
-      this.lastLoadedClasses = '';
-      this.clearMultipleMasks(); // Limpiar máscaras múltiples si existe
-      this.loadMaskLayer();
-      return; // No procesar otros cambios
+    if (changes['sceneId']) {
+      this.handleSceneIdChange();
+      return;
     }
 
-    // Recargar máscara cuando cambian las clases seleccionadas
     if (changes['selectedClassIds']) {
-      const classesStr = (this.selectedClassIds || []).join(',');
-      
-      // En modo individual (con sceneId, sin período)
-      if (this.sceneId && !this.periodo) {
-        if (classesStr !== this.lastLoadedClasses && !this.isLoadingMask) {
-          this.loadMaskLayer();
-        }
-      }
-      // En modo múltiple (con período), recargar máscaras filtradas solo si las clases realmente cambiaron
-      else if (this.periodo && this.regionId && classesStr !== this.lastMultipleMaskClasses && !this.isLoadingMask) {
-        this.lastMultipleMaskClasses = classesStr;
-        this.loadMasksForPeriod();
-      }
+      this.handleSelectedClassIdsChange();
     }
   }
 
@@ -323,8 +334,8 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         if (!this.maskCenteredOnce) {
           this.map.fitBounds(bounds, { padding: [50, 50] });
           // Desplazar la vista hacia arriba después de que fitBounds se complete
-          // Usar 'moveend' en lugar de 'zoomend' porque moveend se dispara siempre
           this.map.once('moveend', () => {
+            // Desplazar hacia arriba (valor positivo = hacia arriba en pantalla)
             this.map.panBy([0, 400], { animate: false });
           });
           this.maskCenteredOnce = true;
@@ -332,6 +343,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       }
 
     } catch (error) {
+      console.error('[LeafletMap] Error loading mask layer:', error);
     } finally {
       this.isLoadingMask = false;
     }
@@ -385,11 +397,13 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       if (!this.maskCenteredOnce) {
         this.map.fitBounds(bounds, { padding: [50, 50] });
         this.map.once('moveend', () => {
+          // Desplazar hacia arriba (valor positivo = hacia arriba en pantalla)
           this.map.panBy([0, 400], { animate: false });
         });
         this.maskCenteredOnce = true;
       }
     } catch (error) {
+      console.error('[LeafletMap] Error loading original image:', error);
     }
   }
 
@@ -413,6 +427,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
 
           layersToAdd.push(layer);
         } catch (error) {
+          console.error('[LeafletMap] Error creating image overlay layer:', error);
         }
       });
 
@@ -422,13 +437,102 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       this.clearMultipleMasks();
       
       // Ahora añadir todas las imágenes originales al mapa
-      layersToAdd.forEach(layer => {
+      for (const layer of layersToAdd) {
         this.originalImageLayers.push(layer);
         layer.addTo(this.map);
-      });
+      }
 
       // Centrar en todas las imágenes la primera vez
       if (!this.maskCenteredOnce && this.originalImageLayers.length > 0) {
+        const group = new L.FeatureGroup(this.originalImageLayers);
+        this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
+        this.map.once('moveend', () => {
+          // Desplazar hacia arriba (valor positivo = hacia arriba en pantalla)
+          this.map.panBy([0, 400], { animate: false });
+        });
+        this.maskCenteredOnce = true;
+      }
+    } catch (error) {
+      console.error('[LeafletMap] Error loading original images for multiple masks:', error);
+    }
+  }
+
+  private updateVisualization(): void {
+    // Resetear el flag para forzar centrado cuando se cambia visualización
+    this.maskCenteredOnce = false;
+    
+    if (this.visualizationType === 'mask') {
+      // Mostrar máscara
+      this.clearOriginalImage();
+      if (this.maskLayer) {
+        this.maskLayer.addTo(this.map);
+        // Centrar la máscara nuevamente al cambiar de visualización
+        if (this.maskLayer instanceof L.ImageOverlay) {
+          const bounds = (this.maskLayer as L.ImageOverlay).getBounds();
+          this.map.fitBounds(bounds, { padding: [50, 50] });
+          this.map.once('moveend', () => {
+            this.map.panBy([0, 400], { animate: false });
+          });
+          this.maskCenteredOnce = true;
+        }
+      } else {
+        this.loadMaskLayer();
+      }
+    } else {
+      // Mostrar imagen original
+      this.clearSingleMask();
+      if (this.originalImageLayer) {
+        this.originalImageLayer.addTo(this.map);
+        // Centrar la imagen original nuevamente al cambiar de visualización
+        if (this.originalImageLayer instanceof L.ImageOverlay) {
+          const bounds = (this.originalImageLayer as L.ImageOverlay).getBounds();
+          this.map.fitBounds(bounds, { padding: [50, 50] });
+          this.map.once('moveend', () => {
+            this.map.panBy([0, 400], { animate: false });
+          });
+          this.maskCenteredOnce = true;
+        }
+      } else {
+        this.loadOriginalImage();
+      }
+    }
+  }
+
+  private updateMultipleMasksVisualization(): void {
+    // Resetear el flag para forzar centrado cuando se cambia visualización
+    this.maskCenteredOnce = false;
+    
+    if (this.visualizationType === 'mask') {
+      this.updateMasksVisualization();
+    } else {
+      this.updateOriginalImagesVisualization();
+    }
+  }
+
+  private updateMasksVisualization(): void {
+    this.clearOriginalImagesMultiple();
+    if (this.maskLayers.length === 0) {
+      this.loadMasksForPeriod();
+    } else {
+      this.addLayersToMap(this.maskLayers);
+      // Centrar en las máscaras al cambiar de visualización
+      const group = new L.FeatureGroup(this.maskLayers);
+      this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
+      this.map.once('moveend', () => {
+        this.map.panBy([0, 400], { animate: false });
+      });
+      this.maskCenteredOnce = true;
+    }
+  }
+
+  private updateOriginalImagesVisualization(): void {
+    this.clearMultipleMasks();
+    if (this.originalImageLayers.length === 0 && this.multiMaskMetadata.length > 0) {
+      this.loadOriginalImagesForMultipleMasks();
+    } else {
+      this.addLayersToMap(this.originalImageLayers);
+      // Centrar en las imágenes originales al cambiar de visualización
+      if (this.originalImageLayers.length > 0) {
         const group = new L.FeatureGroup(this.originalImageLayers);
         this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
         this.map.once('moveend', () => {
@@ -436,74 +540,32 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         });
         this.maskCenteredOnce = true;
       }
-    } catch (error) {
     }
   }
 
-  private updateVisualization(): void {
-    if (this.visualizationType === 'mask') {
-      // Mostrar máscara
-      this.clearOriginalImage();
-      if (!this.maskLayer) {
-        this.loadMaskLayer();
-      } else {
-        this.maskLayer.addTo(this.map);
-      }
-    } else {
-      // Mostrar imagen original
-      this.clearSingleMask();
-      if (!this.originalImageLayer) {
-        this.loadOriginalImage();
-      } else {
-        this.originalImageLayer.addTo(this.map);
-      }
-    }
-  }
-
-  private updateMultipleMasksVisualization(): void {
-    if (this.visualizationType === 'mask') {
-      // Mostrar múltiples máscaras
-      this.clearOriginalImagesMultiple();
-      // Si ya están cargadas, solo mostrar; si no, cargar
-      if (this.maskLayers.length === 0) {
-        this.loadMasksForPeriod();
-      } else {
-        this.maskLayers.forEach(layer => {
-          if (!this.map.hasLayer(layer)) {
-            layer.addTo(this.map);
-          }
-        });
-      }
-    } else {
-      // Mostrar imágenes originales de todas las máscaras
-      this.clearMultipleMasks();
-      if (this.originalImageLayers.length === 0 && this.multiMaskMetadata.length > 0) {
-        this.loadOriginalImagesForMultipleMasks();
-      } else {
-        this.originalImageLayers.forEach(layer => {
-          if (!this.map.hasLayer(layer)) {
-            layer.addTo(this.map);
-          }
-        });
+  private addLayersToMap(layers: L.Layer[]): void {
+    for (const layer of layers) {
+      if (!this.map.hasLayer(layer)) {
+        layer.addTo(this.map);
       }
     }
   }
 
   private clearMultipleMasks(): void {
-    this.maskLayers.forEach(layer => {
+    for (const layer of this.maskLayers) {
       if (this.map.hasLayer(layer)) {
         this.map.removeLayer(layer);
       }
-    });
+    }
     this.maskLayers = [];
   }
 
   private clearOriginalImagesMultiple(): void {
-    this.originalImageLayers.forEach(layer => {
+    for (const layer of this.originalImageLayers) {
       if (this.map.hasLayer(layer)) {
         this.map.removeLayer(layer);
       }
-    });
+    }
     this.originalImageLayers = [];
   }
 
@@ -532,85 +594,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       // Usar getColorsForRendering para obtener los colores correctos según el modo de vista
       const customColors = this.classColorService.getColorsForRendering(this.coverageViewMode);
       this.segmentsService.getMasksForPeriod(this.regionId, this.periodo, classesToShow, customColors, false).subscribe({
-        next: (response: any) => {
-          const masks = response.masks || [];
-          
-          if (masks.length === 0) {
-            this.isLoadingMask = false;
-            return;
-          }
-          // Limpiar capas anteriores
-          this.clearMultipleMasks();
-          this.clearOriginalImagesMultiple();
-          this.multiMaskMetadata = []; // Limpiar metadatos anteriores
-
-          const allBounds: L.LatLngBoundsExpression[] = [];
-
-          const maskImages: string[] = [];
-
-          masks.forEach((maskData: any, index: number) => {
-            try {
-              const bounds = this._convertBounds(maskData.bounds, maskData.crs);
-              
-              if (maskData.image) {
-                // Guardar metadatos para cargar imágenes originales después
-                if (maskData.sceneId) {
-                  this.multiMaskMetadata.push({ sceneId: maskData.sceneId, bounds });
-                }
-                
-                // Guardar la primera máscara para reportes
-                if (index === 0) {
-                  this.currentMaskImageUrl = maskData.image;
-                  this.maskLoaded.emit(maskData.image);
-                }
-                
-                // Guardar todas las imágenes para reportes múltiples
-                maskImages.push(maskData.image);
-                
-                const layer = L.imageOverlay(maskData.image, bounds, {
-                  opacity: this.maskOpacity,
-                  interactive: false
-                });
-
-                this.maskLayers.push(layer);
-                layer.addTo(this.map);
-                allBounds.push(bounds);
-              }
-            } catch (error) {
-            }
-          });
-
-          this.showMask = true;
-
-          // Centrar en todas las máscaras la primera vez
-          if (!this.maskCenteredOnce && allBounds.length > 0) {
-            const group = new L.FeatureGroup(this.maskLayers);
-            this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
-            // Desplazar la vista hacia arriba después de que fitBounds se complete
-            // Usar 'moveend' en lugar de 'zoomend' porque moveend se dispara siempre
-            this.map.once('moveend', () => {
-              this.map.panBy([0, 400], { animate: false });
-            });
-            this.maskCenteredOnce = true;
-          }
-          
-          // Emitir evento para que el componente padre cargue píxeles agregados
-          if (this.regionId && this.periodo) {
-            this.multipeMasksLoaded.emit({ 
-              regionId: this.regionId, 
-              periodo: this.periodo, 
-              maskImages,
-              maskMetadata: masks // Pasar los metadatos completos de las máscaras
-            });
-          }
-          
-          // Si la visualización debe ser "original", cargar las imágenes originales
-          if (this.visualizationType === 'original' && this.multiMaskMetadata.length > 0) {
-            setTimeout(() => {
-              this.updateMultipleMasksVisualization();
-            }, 300);
-          }
-        },
+        next: (response: any) => this.handleMasksResponse(response),
         error: (error: any) => {
         },
         complete: () => {
@@ -618,6 +602,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         }
       });
     } catch (error) {
+      console.error('[LeafletMap] Error loading masks for period:', error);
       this.isLoadingMask = false;
     }
   }
@@ -649,6 +634,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         [maxXY[1], maxXY[0]]
       ];
     } catch (error) {
+      console.error('[LeafletMap] Error converting bounds with projection:', error);
       return [
         [boundsObj.minY, boundsObj.minX],
         [boundsObj.maxY, boundsObj.maxX]
@@ -697,23 +683,21 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     }
     // Múltiples máscaras
     else if (this.maskLayers.length > 0) {
-      this.maskLayers.forEach(layer => {
+      for (const layer of this.maskLayers) {
         if (this.showMask) {
           if (!this.map.hasLayer(layer)) {
             layer.addTo(this.map);
           }
-        } else {
-          if (this.map.hasLayer(layer)) {
-            this.map.removeLayer(layer);
-          }
+        } else if (this.map.hasLayer(layer)) {
+          this.map.removeLayer(layer);
         }
-      });
+      }
     }
   }
 
   onOpacityChange(event: Event): void {
     const target = event.target as HTMLInputElement;
-    this.maskOpacity = parseFloat(target.value);
+    this.maskOpacity = Number.parseFloat(target.value);
     this.updateMaskOpacity();
   }
 
@@ -724,11 +708,104 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     }
     // Múltiples máscaras
     else if (this.maskLayers.length > 0) {
-      this.maskLayers.forEach(layer => {
+      for (const layer of this.maskLayers) {
         if ((layer as any).setOpacity) {
           (layer as any).setOpacity(this.maskOpacity);
         }
+      }
+    }
+  }
+
+  private handleMasksResponse(response: any): void {
+    const masks = response.masks || [];
+    
+    if (masks.length === 0) {
+      this.isLoadingMask = false;
+      return;
+    }
+
+    this.clearMultipleMasks();
+    this.clearOriginalImagesMultiple();
+    this.multiMaskMetadata = [];
+
+    const allBounds: L.LatLngBoundsExpression[] = [];
+    const maskImages: string[] = [];
+
+    this.processMasks(masks, allBounds, maskImages);
+    this.showMask = true;
+    this.centerMasksOnMap(allBounds);
+    this.emitMasksLoadedEvent(maskImages, masks);
+    this.loadOriginalImagesIfNeeded();
+  }
+
+  private processMasks(masks: any[], allBounds: L.LatLngBoundsExpression[], maskImages: string[]): void {
+    for (let index = 0; index < masks.length; index++) {
+      const maskData = masks[index];
+      try {
+        const bounds = this._convertBounds(maskData.bounds, maskData.crs);
+        this.processSingleMask(maskData, bounds, allBounds, maskImages, index);
+      } catch (error) {
+        console.error('[LeafletMap] Error processing mask at index', index, ':', error);
+      }
+    }
+  }
+
+  private processSingleMask(maskData: any, bounds: L.LatLngBoundsExpression, allBounds: L.LatLngBoundsExpression[], maskImages: string[], index: number): void {
+    if (!maskData.image) {
+      return;
+    }
+
+    if (maskData.sceneId) {
+      this.multiMaskMetadata.push({ sceneId: maskData.sceneId, bounds });
+    }
+
+    if (index === 0) {
+      this.currentMaskImageUrl = maskData.image;
+      this.maskLoaded.emit(maskData.image);
+    }
+
+    maskImages.push(maskData.image);
+
+    const layer = L.imageOverlay(maskData.image, bounds, {
+      opacity: this.maskOpacity,
+      interactive: false
+    });
+
+    this.maskLayers.push(layer);
+    layer.addTo(this.map);
+    allBounds.push(bounds);
+  }
+
+  private centerMasksOnMap(allBounds: L.LatLngBoundsExpression[]): void {
+    if (this.maskCenteredOnce || allBounds.length === 0) {
+      return;
+    }
+
+    const group = new L.FeatureGroup(this.maskLayers);
+    this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
+    this.map.once('moveend', () => {
+      // Desplazar hacia arriba (valor positivo = hacia arriba en pantalla)
+      this.map.panBy([0, 400], { animate: false });
+    });
+    this.maskCenteredOnce = true;
+  }
+
+  private emitMasksLoadedEvent(maskImages: string[], masks: any[]): void {
+    if (this.regionId && this.periodo) {
+      this.multipeMasksLoaded.emit({
+        regionId: this.regionId,
+        periodo: this.periodo,
+        maskImages,
+        maskMetadata: masks
       });
+    }
+  }
+
+  private loadOriginalImagesIfNeeded(): void {
+    if (this.visualizationType === 'original' && this.multiMaskMetadata.length > 0) {
+      setTimeout(() => {
+        this.updateMultipleMasksVisualization();
+      }, 300);
     }
   }
 }

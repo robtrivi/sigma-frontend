@@ -78,27 +78,32 @@ export interface SegmentUpdateRequest {
 // ===== INTERFACES PARA ANÁLISIS DE COBERTURA POR PÍXELES Y ÁREA EN M² =====
 
 export interface PixelCoverageItem {
-  class_id: number;
-  class_name: string;
-  pixel_count: number;
-  coverage_percentage: number;
-  area_m2?: number;  // Área en metros cuadrados
+  classId: number;
+  className: string;
+  pixelCount: number;
+  coveragePercentage: number;
+  areaM2?: number;  // Área en metros cuadrados
+  // Snake_case variants for API compatibility
+  class_name?: string;
+  pixel_count?: number;
+  coverage_percentage?: number;
+  area_m2?: number;
 }
 
 export interface SegmentationCoverageResponse {
-  scene_id: string;
-  total_pixels: number;
-  total_area_m2?: number;
-  pixel_area_m2?: number;
-  image_resolution: string;
-  coverage_by_class: PixelCoverageItem[];
-  created_at: string;
+  sceneId: string;
+  totalPixels: number;
+  totalAreaM2?: number;
+  pixelAreaM2?: number;
+  imageResolution: string;
+  coverageByClass: PixelCoverageItem[];
+  createdAt: string;
 }
 
 export interface SegmentationCoverageSummary {
-  scene_id: string;
-  dominant_class: string;
-  dominant_percentage: number;
-  secondary_class?: string;
-  secondary_percentage?: number;
+  sceneId: string;
+  dominantClass: string;
+  dominantPercentage: number;
+  secondaryClass?: string;
+  secondaryPercentage?: number;
 }

@@ -63,8 +63,8 @@ export class ControlPanelComponent implements OnInit, OnChanges {
   selectableCategories: SelectableCategory[] = [];
 
   constructor(
-    private regionsService: RegionsService,
-    private tiffValidationService: TiffValidationService
+    private readonly regionsService: RegionsService,
+    private readonly tiffValidationService: TiffValidationService
   ) {}
 
   ngOnInit(): void {
@@ -77,7 +77,9 @@ export class ControlPanelComponent implements OnInit, OnChanges {
     if (changes['coverageViewMode'] && !changes['coverageViewMode'].firstChange) {
       if (this.coverageViewMode === 'categories') {
         // Deseleccionar todas las categorías para mostrar todas por defecto
-        this.selectableCategories.forEach(cat => cat.selected = false);
+        for (const cat of this.selectableCategories) {
+          cat.selected = false;
+        }
         this.emitSelectedCategories();
       }
     }
@@ -153,11 +155,11 @@ export class ControlPanelComponent implements OnInit, OnChanges {
         this.tiffValidating = false;
 
         // Solo mostrar error si la validación falló, no por advertencias
-        if (!result.valid) {
-          this.tiffValidationError = 'El TIFF no es válido. Revisa las advertencias arriba.';
-        } else {
+        if (result.valid) {
           // TIFF válido - limpiar error aunque haya advertencias
           this.tiffValidationError = null;
+        } else {
+          this.tiffValidationError = 'El TIFF no es válido. Revisa las advertencias arriba.';
         }
 
         // Auto-llenar EPSG si está disponible en el TIFF
@@ -245,24 +247,32 @@ export class ControlPanelComponent implements OnInit, OnChanges {
   }
 
   selectAllClasses(): void {
-    this.classTypes.forEach(classType => classType.selected = true);
+    for (const classType of this.classTypes) {
+      classType.selected = true;
+    }
     this.classFilterChange.emit();
   }
 
   deselectAllClasses(): void {
-    this.classTypes.forEach(classType => classType.selected = false);
+    for (const classType of this.classTypes) {
+      classType.selected = false;
+    }
     this.classFilterChange.emit();
   }
 
   selectAllCategories(): void {
-    this.selectableCategories.forEach(cat => cat.selected = true);
+    for (const cat of this.selectableCategories) {
+      cat.selected = true;
+    }
     this.syncCategoriesWithClasses();
     this.emitSelectedCategories();
     this.classFilterChange.emit();
   }
 
   deselectAllCategories(): void {
-    this.selectableCategories.forEach(cat => cat.selected = false);
+    for (const cat of this.selectableCategories) {
+      cat.selected = false;
+    }
     this.syncCategoriesWithClasses();
     this.emitSelectedCategories();
     this.classFilterChange.emit();
@@ -291,21 +301,24 @@ export class ControlPanelComponent implements OnInit, OnChanges {
 
   private syncCategoriesWithClasses(): void {
     // Obtener clases de las categorías seleccionadas
-    const selectedCategoryIds = this.selectableCategories
+    const selectedCategoryIds = new Set(this.selectableCategories
       .filter(cat => cat.selected)
-      .map(cat => cat.id);
+      .map(cat => cat.id));
 
     const classesInSelectedCategories = new Set<string>();
-    COVERAGE_CATEGORIES
-      .filter(cat => selectedCategoryIds.includes(cat.id))
-      .forEach(cat => {
-        cat.classes.forEach(className => classesInSelectedCategories.add(className));
-      });
+    const selectedCategories = COVERAGE_CATEGORIES
+      .filter(cat => selectedCategoryIds.has(cat.id));
+    
+    for (const cat of selectedCategories) {
+      for (const className of cat.classes) {
+        classesInSelectedCategories.add(className);
+      }
+    }
 
     // Actualizar selección de clases
-    this.classTypes.forEach(ct => {
+    for (const ct of this.classTypes) {
       ct.selected = classesInSelectedCategories.has(ct.label);
-    });
+    }
   }
 
   areAllClassesSelected(): boolean {
@@ -317,12 +330,16 @@ export class ControlPanelComponent implements OnInit, OnChanges {
   }
 
   selectAllMonths(): void {
-    this.months.forEach(month => month.selected = true);
+    for (const month of this.months) {
+      month.selected = true;
+    }
     this.monthFilterChange.emit();
   }
 
   deselectAllMonths(): void {
-    this.months.forEach(month => month.selected = false);
+    for (const month of this.months) {
+      month.selected = false;
+    }
     // Marcar el período más reciente
     const mostRecentMonth = this.findMostRecentMonth();
     if (mostRecentMonth) {
@@ -347,13 +364,11 @@ export class ControlPanelComponent implements OnInit, OnChanges {
       const [recentYear, recentMonth] = mostRecent.id.split('-').map(Number);
       
       // Comparar primero por año, luego por mes
-      if (currentYear > recentYear) {
-        return current;
-      } else if (currentYear === recentYear && currentMonth > recentMonth) {
+      if (currentYear > recentYear || (currentYear === recentYear && currentMonth > recentMonth)) {
         return current;
       }
       
       return mostRecent;
-    });
+    }, this.months[0]);
   }
 }

@@ -1,5 +1,5 @@
-<div class="modal-overlay">
-  <div class="modal" (click)="$event.stopPropagation()">
+<div class="modal-overlay" #dialog>
+  <div class="modal" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()">
     <!-- Modal Header -->
     <div class="modal-header">
       <h2><i class="pi pi-download"></i> Descargar Informe</h2>

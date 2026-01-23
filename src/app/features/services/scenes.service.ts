@@ -10,15 +10,15 @@ import { SceneResponse, SceneUploadRequest } from '../models/api.models';
 export class ScenesService {
   private readonly apiUrl = `${environment.apiBaseUrl}/api/v1/imports/scenes`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private readonly http: HttpClient) {}
 
   uploadScene(payload: SceneUploadRequest): Observable<SceneResponse> {
     const formData = new FormData();
-    formData.append('sceneFile', payload.file);
-    formData.append('captureDate', payload.captureDate);
+    formData.append('scene_file', payload.file);
+    formData.append('capture_date', payload.captureDate);
     formData.append('epsg', payload.epsg.toString());
     formData.append('sensor', payload.sensor);
-    formData.append('regionId', payload.regionId);
+    formData.append('region_id', payload.regionId);
 
     return this.http.post<SceneResponse>(this.apiUrl, formData);
   }

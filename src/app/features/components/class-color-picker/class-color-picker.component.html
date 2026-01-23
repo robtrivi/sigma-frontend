@@ -1,26 +1,37 @@
-<div class="color-picker-overlay" (click)="onClose()">
-  <div class="color-picker-modal" (click)="$event.stopPropagation()">
-    <div class="color-picker-header">
-      <h3>Seleccionar color para {{ className }}</h3>
-      <button class="close-btn" (click)="onClose()">×</button>
+<div class="modal-overlay" (click)="onClose()">
+  <div class="modal" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()">
+    <!-- Modal Header -->
+    <div class="modal-header">
+      <h2><i class="pi pi-palette"></i> Seleccionar color para {{ className }}</h2>
+      <button class="modal-close" (click)="onClose()" aria-label="Cerrar modal"><i class="pi pi-times"></i></button>
     </div>
 
-    <div class="color-picker-content">
+    <!-- Modal Content -->
+    <div class="modal-content">
       <!-- Input de color nativo -->
-      <div class="native-picker">
-        <label>Color personalizado:</label>
-        <input 
-          type="color" 
-          [(ngModel)]="selectedColor" 
-          (change)="onNativeColorChange()"
-          class="color-input"
-        >
-        <span class="color-value">{{ selectedColor }}</span>
+      <div class="color-section">
+        <label for="color-input" class="color-label">Color personalizado:</label>
+        <div class="color-input-wrapper">
+          <input 
+            id="color-input"
+            type="color" 
+            [(ngModel)]="selectedColor" 
+            (change)="onNativeColorChange()"
+            class="color-input"
+          >
+          <span class="color-value">{{ selectedColor }}</span>
+        </div>
+      </div>
+
+      <!-- Vista previa -->
+      <div class="color-preview-section">
+        <label for="preview-label" class="preview-label">Vista previa:</label>
+        <div id="preview-label" class="preview-box" [style.background-color]="selectedColor"></div>
       </div>
 
       <!-- Colores genéricos (colores originales de otras clases) -->
-      <div class="generic-colors">
-        <label>Colores genéricos:</label>
+      <div class="generic-colors-section" *ngIf="originalClassColors && originalClassColors.length > 0">
+        <label class="generic-label">Colores genéricos:</label>
         <div class="color-grid">
           <button 
             *ngFor="let item of originalClassColors"
@@ -29,19 +40,17 @@
             [class.selected]="selectedColor === item.color"
             (click)="selectGenericColor(item.color)"
             [title]="item.className"
-          ></button>
+          >
+            <span class="checkmark" *ngIf="selectedColor === item.color">✓</span>
+          </button>
         </div>
-      </div>
-
-      <div class="color-preview">
-        <label>Vista previa:</label>
-        <div class="preview-box" [style.background-color]="selectedColor"></div>
       </div>
     </div>
 
-    <div class="color-picker-footer">
-      <button class="btn-cancel" (click)="onClose()">Cancelar</button>
-      <button class="btn-confirm" (click)="onColorChange()">Confirmar</button>
+    <!-- Modal Footer -->
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="onClose()">Cancelar</button>
+      <button class="btn-primary" (click)="onColorChange()">Confirmar</button>
     </div>
   </div>
 </div>

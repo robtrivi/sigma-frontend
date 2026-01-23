@@ -20,7 +20,7 @@ export class SegmentsService {
   private readonly regionsUrl = `${environment.apiBaseUrl}/api/v1/regions`;
   private readonly importsUrl = `${environment.apiBaseUrl}/api/v1/imports`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private readonly http: HttpClient) {}
 
   runSegmentation(sceneId: string, tiffFile: File): Observable<SegmentationResponse> {
     const formData = new FormData();
@@ -31,16 +31,16 @@ export class SegmentsService {
 
   getSegmentsTiles(params: SegmentsTilesParams): Observable<SegmentsTilesResponse> {
     let httpParams = new HttpParams()
-      .set('regionId', params.regionId);
+      .set('region_id', params.regionId);
 
     if (params.periodo) {
       httpParams = httpParams.set('periodo', params.periodo);
     }
 
     if (params.classIds && params.classIds.length > 0) {
-      params.classIds.forEach(classId => {
-        httpParams = httpParams.append('classId', classId);
-      });
+      for (const classId of params.classIds) {
+        httpParams = httpParams.append('class_id', classId);
+      }
     }
 
     if (params.bbox) {
@@ -104,7 +104,7 @@ export class SegmentsService {
     
     // Pasar si se debe hacer transparente "Sin etiqueta"
     if (makeUnlabeledTransparent) {
-      params = params.set('makeUnlabeledTransparent', 'true');
+      params = params.set('make_unlabeled_transparent', 'true');
     }
     
     // Pasar clases seleccionadas si existen

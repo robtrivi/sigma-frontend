@@ -18,7 +18,10 @@ import { ClassColorService } from '../services/class-color.service';
 import { SegmentFeature, SceneResponse, Region, PeriodInfo, PixelCoverageItem, SegmentationCoverageResponse } from '../models/api.models';
 import { CLASS_CATALOG, getClassConfig } from '../models/class-catalog';
 import { COVERAGE_CATEGORIES, CoverageCategory } from '../models/coverage-categories';
-import { finalize, forkJoin } from 'rxjs';
+import { finalize, firstValueFrom, of, combineLatest, Observable } from 'rxjs';
+
+export type ReportFormat = 'pdf' | 'csv';
+export type RegionType = 'full' | 'subregion' | 'green-only';
 
 @Component({
   selector: 'app-visualization-sigma',
@@ -65,10 +68,10 @@ export class VisualizationSigmaComponent implements OnInit {
   pixelCoverageData: PixelCoverageItem[] = [];
   filteredPixelCoverageData: PixelCoverageItem[] = [];
   totalPixels: number = 262144; // 512 * 512
-  totalAreaM2: number = 262144.0;  // Área total en m²
-  pixelAreaM2: number = 1.0;  // Área por píxel en m²
+  totalAreaM2: number = 262144;  // Área total en m²
+  pixelAreaM2: number = 1;  // Área por píxel en m²
   filteredTotalPixels: number = 262144;
-  filteredTotalAreaM2: number = 262144.0;  // Área filtrada en m²
+  filteredTotalAreaM2: number = 262144;  // Área filtrada en m²
   usePixelCoverage: boolean = false; // Cambiar a true cuando hay escena cargada
   isLoadingAggregatedCoverage: boolean = false;
   
@@ -119,12 +122,12 @@ export class VisualizationSigmaComponent implements OnInit {
     }));
 
   constructor(
-    private reportGenerator: ReportGeneratorService,
-    private scenesService: ScenesService,
-    private segmentsService: SegmentsService,
-    private regionsService: RegionsService,
-    private classColorService: ClassColorService,
-    private cdr: ChangeDetectorRef
+    private readonly reportGenerator: ReportGeneratorService,
+    private readonly scenesService: ScenesService,
+    private readonly segmentsService: SegmentsService,
+    private readonly regionsService: RegionsService,
+    private readonly classColorService: ClassColorService,
+    private readonly cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -136,7 +139,7 @@ export class VisualizationSigmaComponent implements OnInit {
           this.loadAvailablePeriods();
         }
       },
-      error: (err) => console.error('Error cargando regiones:', err)
+      error: () => {}
     });
     
     // ===== CARGAR PÍXELES SI HAY ESCENA EN SESIÓN =====
@@ -186,7 +189,7 @@ export class VisualizationSigmaComponent implements OnInit {
           this.loadSegmentsTiles();
         }
       },
-      error: (err) => console.error('Error cargando periodos:', err)
+      error: () => {}
     });
   }
 
@@ -202,21 +205,19 @@ export class VisualizationSigmaComponent implements OnInit {
       const [recentYear, recentMonth] = mostRecent.split('-').map(Number);
       
       // Comparar primero por año, luego por mes
-      if (currentYear > recentYear) {
-        return current;
-      } else if (currentYear === recentYear && currentMonth > recentMonth) {
+      if (currentYear > recentYear || (currentYear === recentYear && currentMonth > recentMonth)) {
         return current;
       }
       
       return mostRecent;
-    });
+    }, periods[0]);
   }
 
   private formatPeriodoLabel(periodo: string): string {
     const [year, month] = periodo.split('-');
     const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    return `${monthNames[parseInt(month) - 1]} ${year}`;
+    return `${monthNames[Number.parseInt(month) - 1]} ${year}`;
   }
 
   onSceneUpload(data: SceneUploadData): void {
@@ -263,7 +264,6 @@ export class VisualizationSigmaComponent implements OnInit {
         this.loadAvailablePeriods();
       },
       error: (err) => {
-        console.error('Error cargando escena:', err);
         this.errorMessage.set(err.error?.message || 'Error al cargar la escena');
         this.showProgressDialog.set(false); // Cerrar diálogo si hay error
       }
@@ -283,26 +283,51 @@ export class VisualizationSigmaComponent implements OnInit {
     this.progressSceneId.set(null);
     // Recargar navegador
     setTimeout(() => {
-      window.location.reload();
+      globalThis.location.reload();
     }, 500);
   }
 
   private loadPixelCoverage(sceneId: string): void {
+    if (!sceneId) {
+      this.usePixelCoverage = false;
+      return;
+    }
+
     this.segmentsService.getCoverage(sceneId).subscribe({
       next: (coverage: SegmentationCoverageResponse) => {
-        // Filtrar para excluir "unlabeled"
-        this.pixelCoverageData = coverage.coverage_by_class.filter(item =>
-          item.class_name?.toLowerCase() !== 'unlabeled'
-        );
+        // Validar que la respuesta tiene datos
+        if (!coverage?.coverageByClass || coverage.coverageByClass.length === 0) {
+          console.warn('No coverage data returned from API for sceneId:', sceneId);
+          this.pixelCoverageData = [];
+          this.filteredPixelCoverageData = [];
+          this.totalPixels = 0;
+          this.totalAreaM2 = 0;
+          this.usePixelCoverage = false;
+          return;
+        }
+
+        // Filtrar para excluir "unlabeled" y items con className undefined/null
+        this.pixelCoverageData = coverage.coverageByClass.filter(item => {
+          // Excluir items con className undefined, null o vacío
+          if (!item || !item.className || item.className.trim() === '') {
+            return false;
+          }
+          return item.className.toLowerCase() !== 'unlabeled';
+        });
         
         // Recalcular totales sin "unlabeled"
-        this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-        this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
-        this.pixelAreaM2 = coverage.pixel_area_m2 ?? 1.0;
+        this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixelCount, 0);
+        this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.areaM2 || 0), 0);
+        this.pixelAreaM2 = coverage.pixelAreaM2 ?? 1;
         this.filterPixelCoverageByClass();
         this.usePixelCoverage = true;
       },
       error: (err) => {
+        console.error('Error loading pixel coverage for sceneId:', sceneId, err);
+        this.pixelCoverageData = [];
+        this.filteredPixelCoverageData = [];
+        this.totalPixels = 0;
+        this.totalAreaM2 = 0;
         this.usePixelCoverage = false;
       }
     });
@@ -317,27 +342,51 @@ export class VisualizationSigmaComponent implements OnInit {
 
     this.segmentsService.getAggregatedPixelCoverage(regionId, periodo).subscribe({
       next: (response: any) => {
+        // Validar que la respuesta tiene datos
+        if (!response?.coverageByClass || response.coverageByClass.length === 0) {
+          console.warn('No coverage data returned from API');
+          this.pixelCoverageData = [];
+          this.filteredPixelCoverageData = [];
+          this.totalPixels = 0;
+          this.totalAreaM2 = 0;
+          this.usePixelCoverage = false;
+          return;
+        }
+
         // Convertir respuesta a formato PixelCoverageItem[] y filtrar "unlabeled"
         this.pixelCoverageData = response.coverageByClass
-          .filter((item: any) => item.class_name?.toLowerCase() !== 'unlabeled')
+          .filter((item: any) => {
+            // Excluir items con className undefined, null o vacío
+            // Nota: El API devuelve class_name (snake_case), no className (camelCase)
+            const className = item.class_name || item.className;
+            if (!className || className.trim() === '') {
+              return false;
+            }
+            const isUnlabeled = className.toLowerCase() === 'unlabeled';
+            return !isUnlabeled;
+          })
           .map((item: any) => ({
-            class_id: 0, // No usamos class_id en este contexto
-            class_name: item.class_name,
-            pixel_count: item.pixel_count,
-            coverage_percentage: item.coverage_percentage,
-            area_m2: item.area_m2 || 0
+            classId: 0, // No usamos classId en este contexto
+            className: item.class_name || item.className,
+            pixelCount: item.pixel_count || item.pixelCount || 0,
+            coveragePercentage: item.coverage_percentage || item.coveragePercentage || 0,
+            areaM2: item.area_m2 || item.areaM2 || 0
           }));
 
         // Recalcular totales sin "unlabeled"
-        this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-        this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
-        this.pixelAreaM2 = response.pixelAreaM2 ?? 1.0;
+        this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixelCount, 0);
+        this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.areaM2 || 0), 0);
+        this.pixelAreaM2 = response.pixelAreaM2 ?? 1;
         
         this.filterPixelCoverageByClass();
         this.usePixelCoverage = true;
       },
       error: (err) => {
         console.error('Error loading aggregated pixel coverage:', err);
+        this.pixelCoverageData = [];
+        this.filteredPixelCoverageData = [];
+        this.totalPixels = 0;
+        this.totalAreaM2 = 0;
         this.usePixelCoverage = false;
       },
       complete: () => {
@@ -352,7 +401,13 @@ export class VisualizationSigmaComponent implements OnInit {
     if (this.classTypes.filter(c => c.selected).length === 0) {
       // Si no hay clases seleccionadas, mostrar todas excepto "unlabeled"
       filtered = this.pixelCoverageData
-        .filter(item => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
+        .filter(item => {
+          // Excluir items con className undefined, null o vacío
+          if (!item.className || item.className.trim() === '') {
+            return false;
+          }
+          return item.className.toLowerCase() !== 'unlabeled' && item.className !== 'Sin etiqueta';
+        });
     } else {
       // Filtrar por clases seleccionadas
       const selectedLabels = this.classTypes
@@ -360,7 +415,11 @@ export class VisualizationSigmaComponent implements OnInit {
         .map(c => c.label.toLowerCase());
       
       filtered = this.pixelCoverageData.filter(item => {
-        const itemClassName = item.class_name?.toLowerCase() || '';
+        // Excluir items con className undefined, null o vacío
+        if (!item.className || item.className.trim() === '') {
+          return false;
+        }
+        const itemClassName = item.className.toLowerCase();
         return selectedLabels.some(label => itemClassName.includes(label));
       });
     }
@@ -369,8 +428,8 @@ export class VisualizationSigmaComponent implements OnInit {
     this.filteredPixelCoverageData = [...filtered];
     
     // Calcular totales
-    this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-    this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+    this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixelCount, 0);
+    this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.areaM2 || 0), 0);
     
     // Forzar detección de cambios para que Angular detecte el cambio en el binding
     this.cdr.detectChanges();
@@ -384,14 +443,14 @@ export class VisualizationSigmaComponent implements OnInit {
     const selectedClasses: string[] = [];
     
     // Para cada categoría seleccionada
-    this.selectedCategoryIds.forEach(categoryId => {
+    for (const categoryId of this.selectedCategoryIds) {
       // Encontrar la categoría en COVERAGE_CATEGORIES
       const category = COVERAGE_CATEGORIES.find((cat: CoverageCategory) => cat.id === categoryId);
       if (category) {
         // Agregar todas sus clases a la lista
         selectedClasses.push(...category.classes);
       }
-    });
+    }
     
     return selectedClasses;
   }
@@ -401,7 +460,9 @@ export class VisualizationSigmaComponent implements OnInit {
     
     if (mode === 'categories') {
       // Deseleccionar todas las clases
-      this.classTypes.forEach(classType => classType.selected = false);
+      for (const classType of this.classTypes) {
+        classType.selected = false;
+      }
       // Deseleccionar todas las categorías para mostrar todas por defecto
       this.selectedCategoryIds = [];
       
@@ -432,9 +493,9 @@ export class VisualizationSigmaComponent implements OnInit {
       // Si no hay categorías seleccionadas, deseleccionar todas las clases
       const classesToSelect = this.getClassesForSelectedCategories();
       
-      this.classTypes.forEach(classType => {
+      for (const classType of this.classTypes) {
         classType.selected = classesToSelect.includes(classType.label);
-      });
+      }
       
       // Filtrar los datos para reflejar los cambios en el dashboard
       this.filterPixelCoverageByClass();
@@ -477,7 +538,9 @@ export class VisualizationSigmaComponent implements OnInit {
 
     if (!this.selectedPeriodo && this.availablePeriods.length > 0) {
       this.selectedPeriodo = this.availablePeriods[0].periodo;
-      this.months.forEach(m => m.selected = m.id === this.selectedPeriodo);
+      for (const m of this.months) {
+        m.selected = m.id === this.selectedPeriodo;
+      }
     }
 
     // Cargar cobertura agregada automáticamente cuando hay período Y no hay escena individual
@@ -503,6 +566,7 @@ export class VisualizationSigmaComponent implements OnInit {
     .pipe(finalize(() => {
       this.isLoading.set(false);
       this.loadingMessage.set('');
+      this.errorMessage.set('');
       
       // Respetar el tipo de visualización seleccionado: si estaba en "original", mantenerlo
       if (this.visualizationType() === 'original') {
@@ -547,16 +611,9 @@ export class VisualizationSigmaComponent implements OnInit {
     
     // Solo cargar píxeles agregados si NO hay una escena individual seleccionada
     if (!this.currentScene?.sceneId) {
-      // Crear un sceneId temporal para permitir visualización toggle en dashboard
-      // Usar el regionId como identificador único
-      this.currentScene = {
-        sceneId: event.regionId,
-        regionId: event.regionId,
-        captureDate: new Date().toISOString(),
-        epsg: 32717,
-        sensor: 'aggregated',
-        rasterPath: ''
-      };
+      // No crear un sceneId temporal - mantener currentScene en null/undefined
+      // para indicar que se está en modo de datos agregados
+      // El dashboard usará los datos pasados mediante pixelCoverageDataInput en su lugar
       
       this.loadAggregatedPixelCoverage(event.regionId, event.periodo);
     }
@@ -703,17 +760,24 @@ export class VisualizationSigmaComponent implements OnInit {
     if (this.usePixelCoverage && this.filteredPixelCoverageData.length > 0) {
       const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
       const vegetationAreaM2 = dataToUse
-        .filter(item => vegetationClasses.some(vc => 
-          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
-        ))
-        .reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+        .filter(item => {
+          // Proteger contra className undefined o null
+          // Soportar tanto camelCase como snake_case del API
+          const className = item.className || item.class_name;
+          if (!className) return false;
+          const classNameLower = className.toLowerCase();
+          return vegetationClasses.some(vc => 
+            classNameLower.includes(vc.toLowerCase())
+          );
+        })
+        .reduce((sum, item) => sum + ((item.areaM2 || item.area_m2) || 0), 0);
       
       // Calcular porcentaje basado en área: (área de vegetación / área total) * 100
       const percentage = areaToUse > 0 
         ? (vegetationAreaM2 / areaToUse) * 100 
         : 0;
       
-      return parseFloat(percentage.toFixed(2));
+      return Number.parseFloat(percentage.toFixed(2));
     }
     
     // Fallback: usar segmentos
@@ -721,12 +785,12 @@ export class VisualizationSigmaComponent implements OnInit {
     if (features.length === 0) return 0;
     
     const totalSegments = features.length;
-    const vegetationClasses = ['grass', 'vegetation', 'tree', 'bald-tree'];
+    const vegetationClasses = new Set(['grass', 'vegetation', 'tree', 'bald-tree']);
     const vegetationSegments = features
-      .filter(f => vegetationClasses.includes(f.properties.classId))
+      .filter(f => vegetationClasses.has(f.properties.classId))
       .length;
     
-    const percentage = totalSegments > 0 ? parseFloat(((vegetationSegments / totalSegments) * 100).toFixed(2)) : 0;
+    const percentage = totalSegments > 0 ? Number.parseFloat(((vegetationSegments / totalSegments) * 100).toFixed(2)) : 0;
     return percentage;
   }
 
@@ -738,16 +802,23 @@ export class VisualizationSigmaComponent implements OnInit {
     if (this.usePixelCoverage && this.pixelCoverageData.length > 0) {
       const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
       const vegetationAreaM2 = this.pixelCoverageData
-        .filter(item => vegetationClasses.some(vc => 
-          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
-        ))
-        .reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+        .filter(item => {
+          // Proteger contra className undefined o null
+          // Soportar tanto camelCase como snake_case del API
+          const className = item.className || item.class_name;
+          if (!className) return false;
+          const classNameLower = className.toLowerCase();
+          return vegetationClasses.some(vc => 
+            classNameLower.includes(vc.toLowerCase())
+          );
+        })
+        .reduce((sum, item) => sum + ((item.areaM2 || item.area_m2) || 0), 0);
       
       const percentage = this.totalAreaM2 > 0 
         ? (vegetationAreaM2 / this.totalAreaM2) * 100 
         : 0;
       
-      return parseFloat(percentage.toFixed(2));
+      return Number.parseFloat(percentage.toFixed(2));
     }
     
     return 0;
@@ -758,12 +829,19 @@ export class VisualizationSigmaComponent implements OnInit {
     if (this.usePixelCoverage && this.filteredPixelCoverageData.length > 0) {
       const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
       const vegetationAreaM2 = this.filteredPixelCoverageData
-        .filter(item => vegetationClasses.some(vc => 
-          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
-        ))
-        .reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+        .filter(item => {
+          // Proteger contra className undefined o null
+          // Soportar tanto camelCase como snake_case del API
+          const className = item.className || item.class_name;
+          if (!className) return false;
+          const classNameLower = className.toLowerCase();
+          return vegetationClasses.some(vc => 
+            classNameLower.includes(vc.toLowerCase())
+          );
+        })
+        .reduce((sum, item) => sum + ((item.areaM2 || item.area_m2) || 0), 0);
       
-      return parseFloat(vegetationAreaM2.toFixed(2));
+      return Number.parseFloat(vegetationAreaM2.toFixed(2));
     }
     
     // Fallback: retornar 0 si no hay cobertura por píxeles
@@ -778,12 +856,19 @@ export class VisualizationSigmaComponent implements OnInit {
     if (this.usePixelCoverage && this.pixelCoverageData.length > 0) {
       const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
       const vegetationAreaM2 = this.pixelCoverageData
-        .filter(item => vegetationClasses.some(vc => 
-          item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
-        ))
-        .reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+        .filter(item => {
+          // Proteger contra className undefined o null
+          // Soportar tanto camelCase como snake_case del API
+          const className = item.className || item.class_name;
+          if (!className) return false;
+          const classNameLower = className.toLowerCase();
+          return vegetationClasses.some(vc => 
+            classNameLower.includes(vc.toLowerCase())
+          );
+        })
+        .reduce((sum, item) => sum + ((item.areaM2 || item.area_m2) || 0), 0);
       
-      return parseFloat(vegetationAreaM2.toFixed(2));
+      return Number.parseFloat(vegetationAreaM2.toFixed(2));
     }
     
     return 0;
@@ -793,17 +878,18 @@ export class VisualizationSigmaComponent implements OnInit {
     // Si hay cobertura por píxeles, usarla
     if (this.usePixelCoverage && this.pixelCoverageData.length > 0) {
       return this.pixelCoverageData
+        .filter(pixelItem => pixelItem.className) // Filtrar items sin className
         .map(pixelItem => {
           // Encontrar el classType correspondiente
           const classType = this.classTypes.find(ct => 
-            ct.id.toLowerCase().includes(pixelItem.class_name.toLowerCase()) ||
-            pixelItem.class_name.toLowerCase().includes(ct.label.toLowerCase())
+            ct.id.toLowerCase().includes(pixelItem.className!.toLowerCase()) ||
+            pixelItem.className!.toLowerCase().includes(ct.label.toLowerCase())
           );
           
           return {
-            label: pixelItem.class_name,
+            label: pixelItem.className || 'Unknown',
             icon: classType?.icon || 'pi pi-map-marker',
-            percentage: pixelItem.coverage_percentage,
+            percentage: pixelItem.coveragePercentage,
             gradient: classType ? this.getGradient(classType.id) : 'linear-gradient(90deg, #999999, #999999dd)'
           };
         })
@@ -823,7 +909,7 @@ export class VisualizationSigmaComponent implements OnInit {
       .map(classType => {
         const classFeatures = features.filter(f => f.properties.classId === classType.id);
         const segmentCount = classFeatures.length;
-        const percentage = totalSegments > 0 ? parseFloat(((segmentCount / totalSegments) * 100).toFixed(2)) : 0;
+        const percentage = totalSegments > 0 ? Number.parseFloat(((segmentCount / totalSegments) * 100).toFixed(2)) : 0;
         
         return {
           label: classType.label,
@@ -877,8 +963,8 @@ export class VisualizationSigmaComponent implements OnInit {
       : 'Todos los periodos';
     
     const totalSegments = features.length;
-    const vegetationClasses = ['grass', 'vegetation', 'tree', 'bald-tree'];
-    const vegetationFeatures = features.filter(f => vegetationClasses.includes(f.properties.classId));
+    const vegetationClasses = new Set(['grass', 'vegetation', 'tree', 'bald-tree']);
+    const vegetationFeatures = features.filter(f => vegetationClasses.has(f.properties.classId));
     const vegetationPercentage = this.getCoveragePercentage();
     
     const info = `Período: ${periodoLabel} | Total: ${totalSegments} segmentos | Áreas Verdes: ${vegetationFeatures.length} (${vegetationPercentage}%)`;
@@ -919,7 +1005,7 @@ export class VisualizationSigmaComponent implements OnInit {
       next: (response: any) => {
         // Recargar el frontend después de 1 segundo para que el usuario vea que se completó
         setTimeout(() => {
-          window.location.reload();
+          globalThis.location.reload();
         }, 1000);
       },
       error: (err) => {
@@ -951,126 +1037,160 @@ export class VisualizationSigmaComponent implements OnInit {
     // Para múltiples períodos, cargar datos de cada uno replicando loadAggregatedPixelCoverage
     const requests: any[] = [];
     
-    selectedMonths.forEach(month => {
+    for (const month of selectedMonths) {
       // Cargar cobertura agregada para cada período
       requests.push(
         this.segmentsService.getAggregatedPixelCoverage(this.selectedRegionId, month.id)
       );
-    });
+    }
     
     // También cargar máscaras para cada período
-    const maskRequests: any[] = [];
+    const maskRequests: Observable<any>[] = [];
     const classesToShow = this.classTypes.filter((c: ClassType) => c.selected).map((c: ClassType) => c.id);
     const allClassIds = this.classTypes.map((c: ClassType) => c.id);
     const classIdsToUse = classesToShow.length > 0 ? classesToShow : allClassIds;
+    const makeUnlabeledTransparent = data.format === 'pdf'; // Para PDFs, hacer transparentes los píxeles "unlabeled"
     
-    selectedMonths.forEach(month => {
+    for (const month of selectedMonths) {
       // Cargar máscaras para cada período
       maskRequests.push(
-        this.segmentsService.getMasksForPeriod(this.selectedRegionId, month.id, classIdsToUse)
+        this.segmentsService.getMasksForPeriod(this.selectedRegionId, month.id, classIdsToUse, undefined, makeUnlabeledTransparent)
       );
-    });
+    }
+
+    // Validar que hay solicitudes antes de usar forkJoin
+    if (requests.length === 0 || maskRequests.length === 0) {
+      this.generateSinglePeriodReport(data);
+      return;
+    }
 
     // Ejecutar todas las solicitudes en paralelo
-    forkJoin([...requests, ...maskRequests]).subscribe({
-      next: (allResponses) => {
-        // Las primeras N respuestas son cobertura, las siguientes N son máscaras
-        const coverageResponses = allResponses.slice(0, selectedMonths.length);
-        const maskResponses = allResponses.slice(selectedMonths.length);
-        
-        // Procesar respuestas igual que loadAggregatedPixelCoverage hace
-        this.multiPeriodReportData = selectedMonths.map((month, index) => {
-          const response = coverageResponses[index];
-          const maskResponse = maskResponses[index];
-          
-          // Validar que la respuesta de cobertura tenga la estructura esperada
-          if (!response || !response.coverageByClass || !Array.isArray(response.coverageByClass)) {
-            console.warn(`No valid coverage data for period ${month.label}`);
-            return null;
-          }
-          
-          // Procesar igual que en loadAggregatedPixelCoverage
-          const pixelCoverageData = response.coverageByClass
-            .filter((item: any) => item.class_name?.toLowerCase() !== 'unlabeled')
-            .map((item: any) => ({
-              class_id: 0,
-              class_name: item.class_name,
-              pixel_count: item.pixel_count,
-              coverage_percentage: item.coverage_percentage,
-              area_m2: item.area_m2 || 0
-            }));
-          
-          // Filtrar según clases seleccionadas (igual que filterPixelCoverageByClass)
-          let filteredPixelCoverageData = pixelCoverageData;
-          if (this.classTypes.filter((c: ClassType) => c.selected).length === 0) {
-            // Si no hay clases seleccionadas, mostrar todas excepto "unlabeled"
-            filteredPixelCoverageData = pixelCoverageData
-              .filter((item: any) => item.class_name?.toLowerCase() !== 'unlabeled' && item.class_name !== 'Sin etiqueta');
-          } else {
-            // Filtrar por clases seleccionadas
-            const selectedLabels = this.classTypes
-              .filter((c: ClassType) => c.selected)
-              .map((c: ClassType) => c.label);
-            filteredPixelCoverageData = pixelCoverageData.filter((item: any) =>
-              selectedLabels.some((label: string) => item.class_name?.includes(label))
-            );
-          }
-          
-          const filteredTotalAreaM2 = filteredPixelCoverageData.reduce((sum: number, item: any) => sum + (item.area_m2 || 0), 0);
-          
-          // Calcular cobertura de vegetación (mismo criterio que getCoveragePercentage)
-          const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
-          const vegetationAreaM2 = filteredPixelCoverageData
-            .filter((item: any) => vegetationClasses.some((vc: string) => 
-              item.class_name.includes(vc) || item.class_name.toLowerCase().includes(vc.toLowerCase())
-            ))
-            .reduce((sum: number, item: any) => sum + (item.area_m2 || 0), 0);
-          
-          const vegetationPercentage = filteredTotalAreaM2 > 0 ? (vegetationAreaM2 / filteredTotalAreaM2) * 100 : 0;
-          
-          // Procesar máscaras del período
-          const masks = maskResponse?.masks || [];
-          const multipleMasks = masks.length > 0 
-            ? masks.map((maskData: any) => ({
-                sceneId: maskData.sceneId,
-                captureDate: maskData.captureDate,
-                imageUrl: maskData.image,
-                pixelCoverageData: pixelCoverageData
-              }))
-            : undefined;
-          
-          return {
-            monthLabel: month.label,
-            periodo: month.id,  // Guardar el período en formato YYYY-MM
-            pixelCoverageData: pixelCoverageData,
-            filteredPixelCoverageData: filteredPixelCoverageData,
-            vegetationCoveragePercentage: parseFloat(vegetationPercentage.toFixed(2)),
-            vegetationAreaM2: vegetationAreaM2,
-            totalAreaM2: filteredTotalAreaM2,
-            multipleMasks: multipleMasks,
-            isMultipleMasks: masks.length > 0
-          };
-        }).filter((p: any) => p !== null) as PeriodReportData[];
-
-        // Eliminar fondo negro de todas las máscaras
-        this.removeBlackBackgroundFromAllMasks(() => {
-          // Verificar si tenemos datos válidos
-          if (this.multiPeriodReportData.length === 0) {
-            console.warn('No valid data for multiple periods, using current period');
-            this.generateSinglePeriodReport(data);
-            return;
-          }
-          
-          // Generar el reporte con múltiples períodos
-          this.generateMultiPeriodReport(data);
-        });
-      },
-      error: (err) => {
-        console.error('Error loading multi-period data:', err);
-        // Fallback: generar reporte con datos actuales
-        this.generateSinglePeriodReport(data);
-      }
+    if (requests.length === 0 && maskRequests.length === 0) {
+      this.handleMultiPeriodResponses([], selectedMonths, data);
+      return;
+    }
+    
+    const allRequests: Observable<any>[] = [...requests, ...maskRequests];
+    (allRequests.length > 0 ? combineLatest(allRequests) : of([] as any)).subscribe({
+      next: (allResponses: any[]) => this.handleMultiPeriodResponses(allResponses, selectedMonths, data),
+      error: (err: any) => this.handleMultiPeriodError(err, data)
     });
+  }
+
+  private handleMultiPeriodResponses(allResponses: any[], selectedMonths: any[], data: { format: string; content: string[]; region: string }): void {
+    // Las primeras N respuestas son cobertura, las siguientes N son máscaras
+    const coverageResponses = allResponses.slice(0, selectedMonths.length);
+    const maskResponses = allResponses.slice(selectedMonths.length);
+    
+    // Procesar respuestas igual que loadAggregatedPixelCoverage hace
+    this.multiPeriodReportData = selectedMonths
+      .map((month, index) => this.processPeriodData(month, coverageResponses[index], maskResponses[index]))
+      .filter((p: any) => p !== null) as PeriodReportData[];
+
+    // Eliminar fondo negro de todas las máscaras
+    this.removeBlackBackgroundFromAllMasks(() => {
+      // Verificar si tenemos datos válidos
+      if (this.multiPeriodReportData.length === 0) {
+        console.warn('No valid data for multiple periods, using current period');
+        // Fallback será manejado por el error handler
+        return;
+      }
+      
+      // Generar el reporte con múltiples períodos
+      this.generateMultiPeriodReport({ format: data.format as ReportFormat, content: data.content, region: data.region as RegionType });
+    });
+  }
+
+  private processPeriodData(month: any, response: any, maskResponse: any): PeriodReportData | null {
+    // Validar que la respuesta de cobertura tenga la estructura esperada
+    if (!response?.coverageByClass || !Array.isArray(response.coverageByClass)) {
+      console.warn(`No valid coverage data for period ${month.label}`);
+      return null;
+    }
+    
+    // Procesar igual que en loadAggregatedPixelCoverage (con manejo de snake_case/camelCase)
+    const pixelCoverageData = response.coverageByClass
+      .filter((item: any) => {
+        const className = item.class_name || item.className;
+        if (!className || className.trim() === '') {
+          return false;
+        }
+        const isUnlabeled = className.toLowerCase() === 'unlabeled';
+        return !isUnlabeled;
+      })
+      .map((item: any) => ({
+        classId: 0,
+        className: item.class_name || item.className,
+        pixelCount: item.pixel_count || item.pixelCount || 0,
+        coveragePercentage: item.coverage_percentage || item.coveragePercentage || 0,
+        areaM2: item.area_m2 || item.areaM2 || 0
+      }));
+    
+    const filteredPixelCoverageData = this.filterPixelCoverageBySelectedClasses(pixelCoverageData);
+    const filteredTotalAreaM2 = filteredPixelCoverageData.reduce((sum: number, item: any) => sum + (item.areaM2 || 0), 0);
+    
+    // Calcular cobertura de vegetación
+    const vegetationAreaM2 = this.calculateVegetationArea(filteredPixelCoverageData);
+    const vegetationPercentage = filteredTotalAreaM2 > 0 ? (vegetationAreaM2 / filteredTotalAreaM2) * 100 : 0;
+    
+    // Procesar máscaras del período
+    const masks = maskResponse?.masks || [];
+    const multipleMasks = this.buildMasksArray(masks, pixelCoverageData);
+    
+    return {
+      monthLabel: month.label,
+      periodo: month.id,
+      pixelCoverageData: pixelCoverageData,
+      filteredPixelCoverageData: filteredPixelCoverageData,
+      vegetationCoveragePercentage: Number.parseFloat(vegetationPercentage.toFixed(2)),
+      vegetationAreaM2: vegetationAreaM2,
+      totalAreaM2: filteredTotalAreaM2,
+      multipleMasks: multipleMasks,
+      isMultipleMasks: masks.length > 0
+    };
+  }
+
+  private filterPixelCoverageBySelectedClasses(pixelCoverageData: any[]): any[] {
+    if (this.classTypes.filter((c: ClassType) => c.selected).length === 0) {
+      // Si no hay clases seleccionadas, mostrar todas excepto "unlabeled"
+      return pixelCoverageData.filter((item: any) => item.className?.toLowerCase() !== 'unlabeled' && item.className !== 'Sin etiqueta');
+    }
+    
+    // Filtrar por clases seleccionadas
+    const selectedLabels = this.classTypes
+      .filter((c: ClassType) => c.selected)
+      .map((c: ClassType) => c.label);
+    return pixelCoverageData.filter((item: any) =>
+      selectedLabels.some((label: string) => item.className?.includes(label))
+    );
+  }
+
+  private calculateVegetationArea(pixelCoverageData: any[]): number {
+    const vegetationClasses = ['Vegetación', 'Árbol', 'Árbol sin hojas', 'Césped', 'vegetation', 'grass', 'tree', 'bald-tree'];
+    return pixelCoverageData
+      .filter((item: any) => item.className && vegetationClasses.some((vc: string) => 
+        item.className.includes(vc) || item.className.toLowerCase().includes(vc.toLowerCase())
+      ))
+      .reduce((sum: number, item: any) => sum + (item.areaM2 || 0), 0);
+  }
+
+  private buildMasksArray(masks: any[], pixelCoverageData: any[]): any[] | undefined {
+    if (masks.length === 0) {
+      return undefined;
+    }
+    
+    return masks.map((maskData: any) => ({
+      sceneId: maskData.sceneId,
+      captureDate: maskData.captureDate,
+      imageUrl: maskData.image,
+      pixelCoverageData: pixelCoverageData
+    }));
+  }
+
+  private handleMultiPeriodError(err: any, data: { format: string; content: string[]; region: string }): void {
+    console.error('Error loading multi-period data:', err);
+    // Fallback: generar reporte con datos actuales
+    this.generateSinglePeriodReport(data);
   }
 
   /**
@@ -1087,13 +1207,50 @@ export class VisualizationSigmaComponent implements OnInit {
     
     // Filtrar solo las clases seleccionadas
     return pixelCoverageData.filter(item => 
-      selectedClassIds.includes(String(item.class_id))
+      selectedClassIds.includes(String(item.classId))
     );
   }
 
   private generateSinglePeriodReport(data: { format: string; content: string[]; region: string }): void {
     const activeMonthLabel = this.getSelectedMonths()[0]?.label || 'Noviembre 2024';
-    const maskImageUrl = this.getCurrentMaskImageUrl();
+    
+    // Si es PDF, recargar la máscara con transparencia para "unlabeled"
+    if (data.format === 'pdf' && this.selectedRegionId && this.selectedPeriodo) {
+      this.reloadMaskForReport(() => {
+        const maskImageUrl = this.getCurrentMaskImageUrl();
+        this.generateReportWithMask(data, maskImageUrl, activeMonthLabel);
+      });
+    } else {
+      const maskImageUrl = this.getCurrentMaskImageUrl();
+      this.generateReportWithMask(data, maskImageUrl, activeMonthLabel);
+    }
+  }
+
+  private reloadMaskForReport(callback: () => void): void {
+    const classesToShow = this.getSelectedClassIds();
+    const customColors = this.classColorService.getColorsForRendering(this.coverageViewMode());
+    
+    this.segmentsService.getMasksForPeriod(
+      this.selectedRegionId,
+      this.selectedPeriodo,
+      classesToShow.length > 0 ? classesToShow : undefined,
+      customColors,
+      true  // makeUnlabeledTransparent: true para reportes PDF
+    ).subscribe({
+      next: (response: any) => {
+        if (response?.masks && response.masks.length > 0) {
+          this.currentMaskImageUrl = response.masks[0].image;
+        }
+        callback();
+      },
+      error: () => {
+        // Si hay error, usar la máscara actual
+        callback();
+      }
+    });
+  }
+
+  private generateReportWithMask(data: { format: string; content: string[]; region: string }, maskImageUrl: string, activeMonthLabel: string): void {
     
     // Preparar datos de máscaras múltiples si existen
     const multipleMasks = this.usePixelCoverage && this.multipleMaskImages.length > 0
@@ -1112,9 +1269,9 @@ export class VisualizationSigmaComponent implements OnInit {
         // Si hay colores personalizados, regenerar máscaras
         this.regenerateMasksWithCustomColors(multipleMasks, () => {
           this.reportGenerator.generateReport({
-            format: data.format as 'pdf' | 'csv',
+            format: data.format as ReportFormat,
             content: data.content,
-            region: data.region as 'full' | 'subregion' | 'green-only',
+            region: data.region as RegionType,
             monthLabel: activeMonthLabel,
             // Pasar los datos filtrados según los filtros aplicados (incluyendo filtrado por clases seleccionadas)
             pixelCoverageData: this.getPixelCoverageDataForReport(this.pixelCoverageData),
@@ -1141,9 +1298,9 @@ export class VisualizationSigmaComponent implements OnInit {
         // Sin colores personalizados, solo eliminar fondo negro
         this.removeBlackBackgroundFromMasks(multipleMasks, () => {
           this.reportGenerator.generateReport({
-            format: data.format as 'pdf' | 'csv',
+            format: data.format as ReportFormat,
             content: data.content,
-            region: data.region as 'full' | 'subregion' | 'green-only',
+            region: data.region as RegionType,
             monthLabel: activeMonthLabel,
             // Pasar los datos filtrados según los filtros aplicados (incluyendo filtrado por clases seleccionadas)
             pixelCoverageData: this.getPixelCoverageDataForReport(this.pixelCoverageData),
@@ -1169,9 +1326,9 @@ export class VisualizationSigmaComponent implements OnInit {
       }
     } else {
       this.reportGenerator.generateReport({
-        format: data.format as 'pdf' | 'csv',
+        format: data.format as ReportFormat,
         content: data.content,
-        region: data.region as 'full' | 'subregion' | 'green-only',
+        region: data.region as RegionType,
         monthLabel: activeMonthLabel,
         // Pasar los datos filtrados según los filtros aplicados (incluyendo filtrado por clases seleccionadas)
         pixelCoverageData: this.getPixelCoverageDataForReport(this.pixelCoverageData),
@@ -1199,11 +1356,12 @@ export class VisualizationSigmaComponent implements OnInit {
   private generateMultiPeriodReport(data: { format: string; content: string[]; region: string }): void {
     if (this.multiPeriodReportData && this.multiPeriodReportData.length > 0) {
       // Regenerar máscaras de múltiples períodos con los colores correctos según el modo de vista
-      this.regenerateMultiPeriodMasks(() => {
+      // Para PDFs, también hacer transparentes los píxeles "Sin etiquetar"
+      this.regenerateMultiPeriodMasks(data.format, () => {
         this.reportGenerator.generateReport({
-          format: data.format as 'pdf' | 'csv',
+          format: data.format as ReportFormat,
           content: data.content,
-          region: data.region as 'full' | 'subregion' | 'green-only',
+          region: data.region as RegionType,
           // Pasar datos de múltiples períodos con máscaras regeneradas
           multiPeriodData: this.multiPeriodReportData,
           // Pasar la unidad de área seleccionada
@@ -1218,9 +1376,9 @@ export class VisualizationSigmaComponent implements OnInit {
       });
     } else {
       this.reportGenerator.generateReport({
-        format: data.format as 'pdf' | 'csv',
+        format: data.format as ReportFormat,
         content: data.content,
-        region: data.region as 'full' | 'subregion' | 'green-only',
+        region: data.region as RegionType,
         // Pasar datos de múltiples períodos
         multiPeriodData: this.multiPeriodReportData,
         // Pasar la unidad de área seleccionada
@@ -1300,21 +1458,26 @@ export class VisualizationSigmaComponent implements OnInit {
       return;
     }
     
-    const masksToRegenerate = multipleMasks.map((maskData: any, index: number) => {
+    const masksToRegenerate: Promise<any>[] = [];
+    
+    for (let index = 0; index < multipleMasks.length; index++) {
+      const maskData = multipleMasks[index];
       const metadata = this.multipleMaskMetadata[index];
       if (!metadata) {
-        return null;
+        continue;
       }
       
-      return this.segmentsService.getMasksForPeriod(
-        this.selectedRegionId,
-        metadata.periodo || this.selectedPeriodo,
-        selectedClassIds.length > 0 ? selectedClassIds : undefined,  // Pasar IDs de clases seleccionadas
-        customColors,
-        true  // makeUnlabeledTransparent: true para reportes PDF
-      ).toPromise().then((response: any) => {
-        if (response && response.masks && response.masks.length > 0) {
-          let imageUrl = response.masks[0].image || response.masks[0];
+      const maskPromise = firstValueFrom(
+        this.segmentsService.getMasksForPeriod(
+          this.selectedRegionId,
+          metadata.periodo || this.selectedPeriodo,
+          selectedClassIds.length > 0 ? selectedClassIds : undefined,
+          customColors,
+          true
+        )
+      ).then((response: any) => {
+        if (response?.masks && response.masks.length > 0) {
+          let imageUrl = response?.masks?.[0]?.image || response?.masks?.[0];
           maskData.imageUrl = imageUrl;
           return maskData;
         }
@@ -1323,7 +1486,9 @@ export class VisualizationSigmaComponent implements OnInit {
         console.error('Error regenerating mask:', err);
         return maskData;
       });
-    }).filter((m: any) => m !== null);
+      
+      masksToRegenerate.push(maskPromise);
+    }
     
     if (masksToRegenerate.length > 0) {
       Promise.all(masksToRegenerate).then(() => {
@@ -1334,10 +1499,11 @@ export class VisualizationSigmaComponent implements OnInit {
     }
   }
 
-  private regenerateMultiPeriodMasks(callback: () => void): void {
+  private regenerateMultiPeriodMasks(format: string, callback: () => void): void {
     // Obtener los colores correctos según el modo de vista
     const customColors = this.classColorService.getColorsForRendering(this.coverageViewMode());
     const selectedClassIds = this.getSelectedClassIds();
+    const makeUnlabeledTransparent = format === 'pdf'; // Solo hacer transparentes para PDFs
     
     const periodPromises = this.multiPeriodReportData.map((periodData: any) => {
       if (!periodData.multipleMasks || periodData.multipleMasks.length === 0) {
@@ -1345,17 +1511,18 @@ export class VisualizationSigmaComponent implements OnInit {
       }
       
       const periodo = periodData.periodo || this.selectedPeriodo;
-      
       const maskPromises = periodData.multipleMasks.map((maskData: any, index: number) => {
-        return this.segmentsService.getMasksForPeriod(
-          this.selectedRegionId,
-          periodo,
-          selectedClassIds.length > 0 ? selectedClassIds : undefined,  // Pasar IDs de clases seleccionadas
-          customColors,
-          true  // makeUnlabeledTransparent: true para reportes PDF
-        ).toPromise().then((response: any) => {
-          if (response && response.masks && response.masks.length > index) {
-            let imageUrl = response.masks[index].image || response.masks[index];
+        return firstValueFrom(
+          this.segmentsService.getMasksForPeriod(
+            this.selectedRegionId,
+            periodo,
+            selectedClassIds.length > 0 ? selectedClassIds : undefined,  // Pasar IDs de clases seleccionadas
+            customColors,
+            makeUnlabeledTransparent  // true solo para PDFs
+          )
+        ).then((response: any) => {
+          if (response?.masks && response.masks.length > index) {
+            let imageUrl = response?.masks?.[index]?.image || response?.masks?.[index];
             maskData.imageUrl = imageUrl;
             return maskData;
           }

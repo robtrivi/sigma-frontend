@@ -75,7 +75,7 @@ export interface EpsgSupportResult {
 export class TiffValidationService {
   private readonly apiUrl = `${environment.apiBaseUrl}/api/v1/imports`;
 
-  constructor(private http: HttpClient) {}
+  constructor(private readonly http: HttpClient) {}
 
   validateTiff(file: File, epsgCode?: number): Observable<TiffValidationResult> {
     const formData = new FormData();

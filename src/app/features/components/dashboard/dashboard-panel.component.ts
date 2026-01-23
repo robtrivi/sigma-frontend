@@ -59,11 +59,11 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   pixelCoverageData: PixelCoverageItem[] = [];
   filteredPixelCoverageData: PixelCoverageItem[] = [];
   totalPixels: number = 262144; // 512 * 512
-  totalAreaM2: number = 262144.0;  // Área total en m²
-  totalAreaM2Complete: number = 262144.0;  // Área total completa (sin filtrar por clases)
-  pixelAreaM2: number = 1.0;  // Área por píxel en m²
+  totalAreaM2: number = 262144;  // Área total en m²
+  totalAreaM2Complete: number = 262144;  // Área total completa (sin filtrar por clases)
+  pixelAreaM2: number = 1;  // Área por píxel en m²
   filteredTotalPixels: number = 262144;
-  filteredTotalAreaM2: number = 262144.0;
+  filteredTotalAreaM2: number = 262144;
   isLoadingCoverage: boolean = false;
   coverageError?: string;
   dataLoaded: boolean = false;  // Flag para rastrear si los datos han sido cargados
@@ -84,8 +84,8 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   }
 
   constructor(
-    private segmentsService: SegmentsService,
-    private classColorService: ClassColorService
+    private readonly segmentsService: SegmentsService,
+    private readonly classColorService: ClassColorService
   ) {}
 
   ngOnInit(): void {
@@ -94,54 +94,86 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     }
   }
 
-  ngOnChanges(changes: SimpleChanges): void {
-    // Cuando los datos vienen del componente padre (datos filtrados)
-    // Esto puede ocurrir tanto con múltiples máscaras como cuando hay un sceneId cargado
-    if (changes['pixelCoverageDataInput'] && this.pixelCoverageDataInput !== undefined) {
-      if (this.pixelCoverageDataInput.length > 0) {
-        // Si hay datos, usarlos (ya están filtrados por el padre)
-        this.pixelCoverageData = [...this.pixelCoverageDataInput];
-        this.filteredPixelCoverageData = [...this.pixelCoverageDataInput];
-        this.totalPixels = this.totalPixelsInput > 0 ? this.totalPixelsInput : 262144;
-        this.totalAreaM2 = this.totalAreaM2Input > 0 ? this.totalAreaM2Input : 262144.0;
-        this.filteredTotalPixels = this.totalPixels;
-        this.filteredTotalAreaM2 = this.totalAreaM2;
-        this.dataLoaded = true;
-        // Actualizar datos categorizados si estamos en modo categorías
-        if (this.coverageViewMode() === 'categories') {
-          this.updateCategorizedCoverageData();
-        }
-      } else {
-        // Si está vacío, resetear
-        this.pixelCoverageData = [];
-        this.filteredPixelCoverageData = [];
-        this.categorizedCoverageData = [];
-        this.dataLoaded = false;
-      }
+  private handlePixelCoverageDataInputChange(): void {
+    if (!this.pixelCoverageDataInput || this.pixelCoverageDataInput === undefined) {
+      return;
     }
 
-    // Cuando se reciben los datos completos (sin filtrar por clases)
-    if (changes['pixelCoverageDataCompleteInput'] && this.pixelCoverageDataCompleteInput !== undefined) {
-      if (this.pixelCoverageDataCompleteInput.length > 0) {
-        this.totalAreaM2Complete = this.totalAreaM2CompleteInput > 0 ? this.totalAreaM2CompleteInput : 262144.0;
-      }
-    }
-    
-    // Cuando sceneId cambia, cargar los datos individuales
-    if (changes['sceneId'] && !changes['sceneId'].firstChange) {
-      if (this.sceneId) {
-        this.dataLoaded = false;  // Resetear flag cuando sceneId cambia
-        this.loadPixelCoverage();
-      }
-    }
-    
-    // Cuando selectedClassIds cambia, filtrar SOLO si los datos han sido cargados
-    if (changes['selectedClassIds'] && this.dataLoaded && this.pixelCoverageData && this.pixelCoverageData.length > 0) {
-      this.filterPixelCoverageByClass();
-      // Actualizar datos categorizados si estamos en modo categorías
+    if (this.pixelCoverageDataInput.length > 0) {
+      this.pixelCoverageData = [...this.pixelCoverageDataInput];
+      this.filteredPixelCoverageData = [...this.pixelCoverageDataInput];
+      this.totalPixels = this.totalPixelsInput > 0 ? this.totalPixelsInput : 262144;
+      this.totalAreaM2 = this.totalAreaM2Input > 0 ? this.totalAreaM2Input : 262144;
+      this.filteredTotalPixels = this.totalPixels;
+      this.filteredTotalAreaM2 = this.totalAreaM2;
+      this.dataLoaded = true;
+      
       if (this.coverageViewMode() === 'categories') {
         this.updateCategorizedCoverageData();
       }
+    } else {
+      this.pixelCoverageData = [];
+      this.filteredPixelCoverageData = [];
+      this.categorizedCoverageData = [];
+      this.dataLoaded = false;
+    }
+  }
+
+  private handlePixelCoverageDataCompleteInputChange(): void {
+    if (!this.pixelCoverageDataCompleteInput || this.pixelCoverageDataCompleteInput === undefined) {
+      return;
+    }
+
+    if (this.pixelCoverageDataCompleteInput.length > 0) {
+      this.totalAreaM2Complete = this.totalAreaM2CompleteInput > 0 ? this.totalAreaM2CompleteInput : 262144;
+    }
+  }
+
+  private handleSceneIdChange(changes: SimpleChanges): void {
+    if (!changes['sceneId'] || changes['sceneId'].firstChange) {
+      return;
+    }
+
+    // Si ya tenemos datos del componente padre (pixelCoverageDataInput),
+    // no intentar cargar del API incluso si sceneId cambia
+    // Esto previene cargar datos innecesarios cuando se está en modo agregado
+    if (this.pixelCoverageDataInput && this.pixelCoverageDataInput.length > 0) {
+      return;
+    }
+
+    if (this.sceneId) {
+      this.dataLoaded = false;
+      this.loadPixelCoverage();
+    }
+  }
+
+  private handleSelectedClassIdsChange(): void {
+    if (!this.dataLoaded || !this.pixelCoverageData || this.pixelCoverageData.length === 0) {
+      return;
+    }
+
+    this.filterPixelCoverageByClass();
+    
+    if (this.coverageViewMode() === 'categories') {
+      this.updateCategorizedCoverageData();
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['pixelCoverageDataInput']) {
+      this.handlePixelCoverageDataInputChange();
+    }
+
+    if (changes['pixelCoverageDataCompleteInput']) {
+      this.handlePixelCoverageDataCompleteInputChange();
+    }
+
+    if (changes['sceneId']) {
+      this.handleSceneIdChange(changes);
+    }
+
+    if (changes['selectedClassIds']) {
+      this.handleSelectedClassIdsChange();
     }
   }
 
@@ -153,6 +185,13 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
       return;
     }
 
+    // Validar que sceneId sea un UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(this.sceneId)) {
+      console.warn('Invalid sceneId format, not loading coverage:', this.sceneId);
+      return;
+    }
+
     this.isLoadingCoverage = true;
     this.coverageError = undefined;
     this.dataLoaded = false;  // Marcar como no cargado
@@ -160,15 +199,15 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     this.segmentsService.getCoverage(this.sceneId).subscribe({
       next: (coverage) => {
         // Filtrar para excluir "unlabeled"
-        const allData = coverage.coverage_by_class || [];
+        const allData = coverage.coverageByClass || [];
         this.pixelCoverageData = allData.filter(item => 
-          item.class_name?.toLowerCase() !== 'unlabeled'
+          item.className?.toLowerCase() !== 'unlabeled'
         );
         
         // Recalcular totales sin la clase "unlabeled"
-        this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-        this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
-        this.pixelAreaM2 = coverage.pixel_area_m2 ?? 1.0;
+        this.totalPixels = this.pixelCoverageData.reduce((sum, item) => sum + item.pixelCount, 0);
+        this.totalAreaM2 = this.pixelCoverageData.reduce((sum, item) => sum + (item.areaM2 || 0), 0);
+        this.pixelAreaM2 = coverage.pixelAreaM2 ?? 1;
         
         // Marcar como cargado ANTES de filtrar
         this.dataLoaded = true;
@@ -192,24 +231,24 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     if (this.selectedClassIds.length === 0) {
       // Si no hay clases seleccionadas, mostrar todas excepto "unlabeled"
       this.filteredPixelCoverageData = [...this.pixelCoverageData]
-        .filter(item => item.class_name !== 'unlabeled')  // Excluir "Sin etiqueta"
+        .filter(item => item.className !== 'unlabeled')  // Excluir "Sin etiqueta"
         .sort((a, b) => 
-          (b.coverage_percentage || 0) - (a.coverage_percentage || 0)
+          (b.coveragePercentage || 0) - (a.coveragePercentage || 0)
         );
-      this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+      this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixelCount, 0);
+      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.areaM2 || 0), 0);
     } else {
       // Filtrar por clases seleccionadas
       // Si tenemos class_id válido (no 0), usar ese; si no, mapear por class_name
       this.filteredPixelCoverageData = this.pixelCoverageData
         .filter(item => {
-          // Primero intentar por class_id si es diferente de 0
-          if (item.class_id && item.class_id !== 0) {
-            const classIdStr = this.getClassIdStringByIndex(item.class_id);
+          // Primero intentar por classId si es diferente de 0
+          if (item.classId && item.classId !== 0) {
+            const classIdStr = this.getClassIdStringByIndex(item.classId);
             return this.selectedClassIds.includes(classIdStr);
           }
           
-          // Si class_id es 0, intentar mapear por class_name
+          // Si classId es 0, intentar mapear por className
           // Mapear nombres de clases en español a IDs
           const classNameToIdMap: { [key: string]: string } = {
             'Sin etiqueta': 'unlabeled',
@@ -238,16 +277,16 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
             'Conflicto': 'conflicting'
           };
           
-          const classId = classNameToIdMap[item.class_name];
+          const classId = classNameToIdMap[item.className];
           return classId && this.selectedClassIds.includes(classId);
         })
         .sort((a, b) => 
-          (b.coverage_percentage || 0) - (a.coverage_percentage || 0)
+          (b.coveragePercentage || 0) - (a.coveragePercentage || 0)
         );
       
       // Calcular total de píxeles y área filtrados
-      this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixel_count, 0);
-      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.area_m2 || 0), 0);
+      this.filteredTotalPixels = this.filteredPixelCoverageData.reduce((sum, item) => sum + item.pixelCount, 0);
+      this.filteredTotalAreaM2 = this.filteredPixelCoverageData.reduce((sum, item) => sum + (item.areaM2 || 0), 0);
     }
 
     // Actualizar datos categorizados si está en modo categorías
@@ -268,6 +307,11 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   }
 
   getColorForClass(className: string): string {
+    // Verificar si className es undefined o null
+    if (!className) {
+      return '#cccccc'; // Color gris por defecto para valores sin etiquetar
+    }
+
     // Mapear nombre de clase a ID de clase para obtener el color correcto
     const classNameToIdMap: { [key: string]: string } = {
       'Sin etiqueta': 'unlabeled',
@@ -297,7 +341,7 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     };
     
     // Obtener el ID de clase correspondiente
-    const classId = classNameToIdMap[className] || className.toLowerCase().replace(/\s+/g, '-');
+    const classId = classNameToIdMap[className] || className.toLowerCase().replaceAll(' ', '-');
     
     // Usar la función getClassColor del catalog que tiene todos los colores correctos
     return getClassColor(classId);
@@ -353,15 +397,15 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     // Construir lista de colores originales de TODAS las clases
     this.originalClassColors = [];
     if (this.pixelCoverageData && this.pixelCoverageData.length > 0) {
-      this.pixelCoverageData.forEach(item => {
-        if (item.class_name) {
-          const color = this.getColorForClass(item.class_name);
+      for (const item of this.pixelCoverageData) {
+        if (item.className) {
+          const color = this.getColorForClass(item.className);
           this.originalClassColors.push({
-            className: item.class_name,
+            className: item.className,
             color: color
           });
         }
-      });
+      }
     }
     
     // Ordenar alfabéticamente por nombre de clase
@@ -470,22 +514,6 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
         category.categoryColor = customColor;
       }
     }
-  }
-
-  convertAreaForCategory(areaM2: number): number {
-    if (this.areaUnit() === 'ha') {
-      return areaM2 * this.M2_TO_HA;
-    }
-    return areaM2;
-  }
-
-  getHexColor(color: string): string {
-    // Si ya es hexadecimal, devolverlo
-    if (color.startsWith('#')) {
-      return color;
-    }
-    // Si es RGB, convertir a hexadecimal
-    return color;
   }
 
   getMappedCategoryColors(): { className: string; color: string }[] {

@@ -14,7 +14,7 @@ export class ClassColorPickerComponent implements OnInit {
   @Input() currentColor: string = '#000000';
   @Input() originalClassColors: { className: string; color: string }[] = []; // Colores originales de otras clases o categorías
   @Output() colorSelected = new EventEmitter<string>();
-  @Output() close = new EventEmitter<void>();
+  @Output() pickerClosed = new EventEmitter<void>();
 
   selectedColor: string = '#000000';
 
@@ -24,7 +24,7 @@ export class ClassColorPickerComponent implements OnInit {
 
   onColorChange(): void {
     this.colorSelected.emit(this.selectedColor);
-    this.close.emit();
+    this.pickerClosed.emit();
   }
 
   onNativeColorChange(): void {
@@ -37,7 +37,7 @@ export class ClassColorPickerComponent implements OnInit {
   }
 
   onClose(): void {
-    this.close.emit();
+    this.pickerClosed.emit();
   }
 }
 

@@ -10,7 +10,7 @@ import { CommonModule } from '@angular/common';
 })
 export class DownloadModalComponent {
   @Input() selectedPeriodsCount: number = 1;
-  @Output() close = new EventEmitter<void>();
+  @Output() modalClosed = new EventEmitter<void>();
   @Output() download = new EventEmitter<{ format: string; content: string[]; region: string }>();
 
   // Form state
@@ -55,7 +55,7 @@ export class DownloadModalComponent {
   }
 
   getSelectedContentCount(): number {
-    return Object.values(this.selectedContent).filter(v => v).length;
+    return Object.values(this.selectedContent).filter(Boolean).length;
   }
 
   getEstimatedSize(): string {
@@ -97,6 +97,6 @@ export class DownloadModalComponent {
   }
 
   closeModal(): void {
-    this.close.emit();
+    this.modalClosed.emit();
   }
 }

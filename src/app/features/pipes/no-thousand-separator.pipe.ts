@@ -17,12 +17,12 @@ export class NoThousandSeparatorPipe implements PipeTransform {
     }
 
     // Parsear el formato: '1.2-2' significa minDigits.minDecimals-maxDecimals
-    const parts = format.match(/(\d+)\.(\d+)-(\d+)/);
+    const parts = /^(\d{1,2})\.(\d{1,2})-(\d{1,2})$/.exec(format);
     if (!parts) {
       return String(value);
     }
 
-    const maxDecimals = parseInt(parts[3], 10);
+    const maxDecimals = Number.parseInt(parts[3], 10);
 
     // Redondear el número al máximo de decimales especificado
     const multiplier = Math.pow(10, maxDecimals);

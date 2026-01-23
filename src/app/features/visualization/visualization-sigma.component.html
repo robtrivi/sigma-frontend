@@ -27,7 +27,9 @@
         <div class="tab" 
              *ngFor="let month of getSelectedMonths()" 
              [class.active]="activeMonth === month.id"
-             (click)="setActiveMonth(month.id)">
+             (click)="setActiveMonth(month.id)"
+             (keydown.enter)="setActiveMonth(month.id)"
+             (keydown.space)="setActiveMonth(month.id)">
           <i class="pi pi-calendar"></i> {{ month.label }}
         </div>
       </div>
@@ -94,21 +96,21 @@
   <app-download-modal 
     *ngIf="showDownloadModal"
     [selectedPeriodsCount]="getSelectedMonths().length"
-    (close)="onDownloadModalClose()"
+    (modalClosed)="onDownloadModalClose()"
     (download)="onDownloadModalSubmit($event)"
   ></app-download-modal>
 
   <app-clear-data-confirmation-dialog
     *ngIf="showClearDataConfirmation"
-    (close)="onClearDataDialogClose()"
+    (dialogClosed)="onClearDataDialogClose()"
     (confirm)="onClearDataConfirm()"
   ></app-clear-data-confirmation-dialog>
 
   <app-segmentation-progress-dialog
     [isVisible]="showProgressDialog"
     [sceneId]="progressSceneId"
-    (onClose)="onProgressDialogClose()"
-    (onVisualize)="onVisualizeMapa($event)"
+    (progressClosed)="onProgressDialogClose()"
+    (visualizeRequested)="onVisualizeMapa($event)"
   ></app-segmentation-progress-dialog>
 
   <app-mask-loading-dialog

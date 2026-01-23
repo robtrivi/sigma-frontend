@@ -10,8 +10,8 @@ export interface ClassColor {
   providedIn: 'root'
 })
 export class ClassColorService {
-  private customColors: Map<string, string> = new Map();
-  private categoryColors: Map<string, string> = new Map();
+  private readonly customColors: Map<string, string> = new Map();
+  private readonly categoryColors: Map<string, string> = new Map();
   private readonly STORAGE_KEY = 'sigma_class_colors';
   private readonly CATEGORY_STORAGE_KEY = 'sigma_category_colors';
 
@@ -74,15 +74,15 @@ export class ClassColorService {
       // Crear un mapa temporal clase→color usando colores de categoría
       const classColorMap = new Map<string, string>();
       
-      COVERAGE_CATEGORIES.forEach(category => {
+      for (const category of COVERAGE_CATEGORIES) {
         // Obtener el color de la categoría (personalizado o default)
         const categoryColor = this.categoryColors.get(category.name) || category.color;
         
         // Mapear cada clase de esta categoría al color de la categoría
-        category.classes.forEach(className => {
+        for (const className of category.classes) {
           classColorMap.set(className, categoryColor);
-        });
-      });
+        }
+      }
       
       return classColorMap;
     } else {
@@ -96,9 +96,9 @@ export class ClassColorService {
   // Guardar colores de clases en localStorage
   private saveColorsToStorage(): void {
     const colorsObj: Record<string, string> = {};
-    this.customColors.forEach((color, className) => {
+    for (const [className, color] of this.customColors) {
       colorsObj[className] = color;
-    });
+    }
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(colorsObj));
   }
 
@@ -108,9 +108,9 @@ export class ClassColorService {
     if (stored) {
       try {
         const colorsObj = JSON.parse(stored);
-        Object.entries(colorsObj).forEach(([className, color]) => {
+        for (const [className, color] of Object.entries(colorsObj)) {
           this.customColors.set(className, color as string);
-        });
+        }
       } catch (error) {
         console.error('Error loading custom colors from storage:', error);
       }
@@ -120,9 +120,9 @@ export class ClassColorService {
   // Guardar colores de categorías en localStorage
   private saveCategoryColorsToStorage(): void {
     const colorsObj: Record<string, string> = {};
-    this.categoryColors.forEach((color, categoryName) => {
+    for (const [categoryName, color] of this.categoryColors) {
       colorsObj[categoryName] = color;
-    });
+    }
     localStorage.setItem(this.CATEGORY_STORAGE_KEY, JSON.stringify(colorsObj));
   }
 
@@ -132,9 +132,9 @@ export class ClassColorService {
     if (stored) {
       try {
         const colorsObj = JSON.parse(stored);
-        Object.entries(colorsObj).forEach(([categoryName, color]) => {
+        for (const [categoryName, color] of Object.entries(colorsObj)) {
           this.categoryColors.set(categoryName, color as string);
-        });
+        }
       } catch (error) {
         console.error('Error loading category colors from storage:', error);
       }

@@ -1,5 +1,5 @@
-<div class="modal-overlay" (click)="onCancel()">
-  <div class="modal-content" (click)="$event.stopPropagation()">
+<div class="modal-overlay" (click)="onCancel()" (keydown.escape)="onCancel()" #dialog>
+  <div class="modal-content" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()">
     <div class="modal-header">
       <h2>Confirmar borrado de datos</h2>
       <button class="close-btn" (click)="onCancel()">&times;</button>

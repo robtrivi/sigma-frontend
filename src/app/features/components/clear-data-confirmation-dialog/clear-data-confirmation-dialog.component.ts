@@ -9,15 +9,15 @@ import { CommonModule } from '@angular/common';
   styleUrl: './clear-data-confirmation-dialog.component.scss'
 })
 export class ClearDataConfirmationDialogComponent {
-  @Output() close = new EventEmitter<void>();
+  @Output() dialogClosed = new EventEmitter<void>();
   @Output() confirm = new EventEmitter<void>();
 
   onCancel(): void {
-    this.close.emit();
+    this.dialogClosed.emit();
   }
 
   onAccept(): void {
     this.confirm.emit();
-    this.close.emit();
+    this.dialogClosed.emit();
   }
 }
