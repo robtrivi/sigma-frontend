@@ -235,7 +235,7 @@ export class ReportGeneratorService {
           <p style="margin-bottom: 15px;">Basado en el análisis actual, se sugieren las siguientes acciones para optimizar la gestión de áreas verdes:</p>
           
           <div class="recommendation-item">
-            <div class="recommendation-title">1. Aumentar Cobertura Verde</div>
+            <div class="recommendation-title">1. Aumentar Áreas Verdes</div>
             <div class="recommendation-desc">La cobertura actual del 35% se encuentra en un nivel aceptable. Se recomienda un objetivo de 40-45% para mejorar la calidad ambiental del campus.</div>
           </div>
           
@@ -431,7 +431,7 @@ export class ReportGeneratorService {
       
       const { label, count } = this.getItemsLabelAndCount(options);
       
-      statsContent = `<div class="section"><div class="section-title">Estadísticas de Cobertura</div><div class="stats-grid"><div class="stat-card"><div class="stat-label">Área Total (${unitLabel})</div><div class="stat-value">${totalArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Cobertura Verde</div><div class="stat-value">${greenPercentage.toFixed(2)}%</div></div><div class="stat-card"><div class="stat-label">Áreas Verdes (${unitLabel})</div><div class="stat-value">${vegetationArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">${label}</div><div class="stat-value">${count}</div></div></div></div>`;
+      statsContent = `<div class="section"><div class="section-title">Estadísticas de Cobertura</div><div class="stats-grid"><div class="stat-card"><div class="stat-label">Área Total (${unitLabel})</div><div class="stat-value">${totalArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">${label}</div><div class="stat-value">${count}</div></div><div class="stat-card"><div class="stat-label">Áreas Verdes (${unitLabel})</div><div class="stat-value">${vegetationArea.toFixed(2)}</div></div><div class="stat-card"><div class="stat-label">Áreas Verdes %</div><div class="stat-value">${greenPercentage.toFixed(2)}%</div></div></div></div>`;
     }
     return statsContent;
   }
@@ -691,8 +691,8 @@ export class ReportGeneratorService {
       const totalClassCount = options.pixelCoverageData.filter(item => getClassName(item)?.toLowerCase() !== 'unlabeled' && getClassName(item) !== 'Sin etiqueta').length;
       
       csv += `Área Total (${unitLabel}),${totalArea.toFixed(2)}\n`;
-      csv += `Cobertura Verde,${(options.vegetationCoveragePercentage || 0).toFixed(2)}%\n`;
       csv += `Áreas Verdes (${unitLabel}),${vegetationArea.toFixed(2)}\n`;
+      csv += `Áreas Verdes %,${(options.vegetationCoveragePercentage || 0).toFixed(2)}%\n`;
       csv += `Total de Clases,${totalClassCount}\n`;
     }
     return csv + '\n';

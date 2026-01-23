@@ -12,7 +12,7 @@ export interface CoverageCategory {
 export const COVERAGE_CATEGORIES: CoverageCategory[] = [
   {
     id: 'vegetation',
-    name: 'Cobertura vegetal',
+    name: 'Cobertura natural',
     classes: ['Césped', 'Vegetación', 'Árbol', 'Árbol sin hojas', 'Rocas', 'Tierra'],
     color: '#2D5016'
   },
@@ -120,4 +120,33 @@ export function groupCoverageByCategory(
   }
 
   return result;
+}
+
+/**
+ * Calcula el área de "Áreas Verdes" que incluye solo las clases específicas:
+ * Vegetación, Césped, Árbol y Árbol sin Hojas
+ */
+export const GREEN_AREAS_CLASSES = ['Vegetación', 'Césped', 'Árbol', 'Árbol sin hojas'];
+
+export function calculateGreenAreasMetrics(
+  coverageData: any[],
+  totalAreaM2: number
+): { areaM2: number; percentage: number } {
+  let greenAreaM2 = 0;
+
+  for (const item of coverageData) {
+    const className = item.class_name || item.className;
+    const areaM2 = item.area_m2 || item.areaM2 || 0;
+
+    if (className && GREEN_AREAS_CLASSES.includes(className)) {
+      greenAreaM2 += areaM2;
+    }
+  }
+
+  const percentage = totalAreaM2 > 0 ? (greenAreaM2 / totalAreaM2) * 100 : 0;
+
+  return {
+    areaM2: greenAreaM2,
+    percentage: percentage
+  };
 }

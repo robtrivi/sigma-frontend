@@ -78,6 +78,14 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
   // ===== AGRUPAMIENTO POR CATEGORÍAS =====
   coverageViewMode = signal<'classes' | 'categories'>('classes'); // 'classes' o 'categories'
   categorizedCoverageData: CoverageItemByCategory[] = [];
+  
+  // Métricas para categorías seleccionadas (usadas en la sección "Datos Generales")
+  selectedCategoriesTotalAreaM2: number = 0; // Área total de categorías seleccionadas
+  selectedCategoriesCoveragePercentage: number = 0; // Porcentaje de cobertura de categorías seleccionadas
+  
+  // Métricas de "Áreas Verdes" (Vegetación, Césped, Árbol, Árbol sin hojas)
+  greenAreasM2: number = 0; // Área de "Áreas Verdes"
+  greenAreasCoveragePercentage: number = 0; // Porcentaje de "Áreas Verdes"
 
   get selectedCategoriesCount(): number {
     return this.categorizedCoverageData.length;
@@ -159,6 +167,15 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
     }
   }
 
+  private handleSelectedCategoryIdsChange(): void {
+    if (this.coverageViewMode() !== 'categories' || !this.dataLoaded) {
+      return;
+    }
+
+    this.updateCategorizedCoverageData();
+    this.updateSelectedCategoriesCoverageMetrics();
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['pixelCoverageDataInput']) {
       this.handlePixelCoverageDataInputChange();
@@ -174,6 +191,10 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
 
     if (changes['selectedClassIds']) {
       this.handleSelectedClassIdsChange();
+    }
+
+    if (changes['selectedCategoryIds']) {
+      this.handleSelectedCategoryIdsChange();
     }
   }
 
@@ -514,6 +535,46 @@ export class DashboardPanelComponent implements OnInit, OnChanges {
         category.categoryColor = customColor;
       }
     }
+
+    // Actualizar las métricas de categorías seleccionadas para la sección "Datos Generales"
+    this.updateSelectedCategoriesCoverageMetrics();
+  }
+
+  private updateSelectedCategoriesCoverageMetrics(): void {
+    // Calcular el área total y porcentaje de cobertura de las categorías seleccionadas
+    const totalAreaForCategories = this.totalAreaM2CompleteInput > 0 
+      ? this.totalAreaM2CompleteInput 
+      : this.totalAreaM2;
+
+    // Sumar el área total de las categorías seleccionadas
+    this.selectedCategoriesTotalAreaM2 = this.categorizedCoverageData.reduce(
+      (sum, category) => sum + category.totalAreaM2,
+      0
+    );
+
+    // Calcular el porcentaje de cobertura de categorías seleccionadas
+    this.selectedCategoriesCoveragePercentage = totalAreaForCategories > 0
+      ? (this.selectedCategoriesTotalAreaM2 / totalAreaForCategories) * 100
+      : 0;
+
+    // Calcular métricas de "Áreas Verdes" solo de las CLASES que están en CATEGORÍAS SELECCIONADAS
+    // Extraer todas las clases que están en las categorías seleccionadas
+    let greenAreaM2 = 0;
+    const GREEN_AREAS_CLASSES = ['Vegetación', 'Césped', 'Árbol', 'Árbol sin hojas'];
+    
+    // Iterar sobre las categorías seleccionadas y sumar solo las clases de áreas verdes
+    for (const category of this.categorizedCoverageData) {
+      for (const classItem of category.classesInCategory) {
+        if (GREEN_AREAS_CLASSES.includes(classItem.className)) {
+          greenAreaM2 += classItem.areaM2;
+        }
+      }
+    }
+
+    this.greenAreasM2 = greenAreaM2;
+    this.greenAreasCoveragePercentage = this.selectedCategoriesTotalAreaM2 > 0
+      ? (greenAreaM2 / this.selectedCategoriesTotalAreaM2) * 100
+      : 0;
   }
 
   getMappedCategoryColors(): { className: string; color: string }[] {
