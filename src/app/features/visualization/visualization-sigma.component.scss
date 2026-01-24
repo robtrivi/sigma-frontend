@@ -492,30 +492,40 @@ app-leaflet-map {
   .sigma-container {
     padding: 12px;
     gap: 12px;
+    flex-direction: column;
+    overflow-y: auto;
   }
 
   .sigma-main-layout {
     flex-direction: column;
+    min-height: 0;
+    flex: 1;
   }
 
   app-control-panel {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     width: 100%;
     height: auto;
+    max-height: 40vh;
+    overflow-y: auto;
   }
 
   .content-wrapper {
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
   }
 
   app-leaflet-map {
-    min-height: 300px;
+    flex: 1;
+    min-height: 280px;
   }
 
   app-dashboard-panel {
-    width: 100%;
-    flex: 1 1 auto;
+    flex: 1;
+    min-height: 180px;
+    overflow-y: auto;
   }
 
   .bottom-toolbar {
@@ -545,6 +555,28 @@ app-leaflet-map {
       padding: 8px 16px;
       font-size: 12px;
     }
+  }
+}
+
+// Tablet Medium (768px - 1024px)
+@media (max-width: 1024px) and (min-width: 769px) {
+  .sigma-container {
+    overflow-y: visible;
+  }
+
+  app-control-panel {
+    max-height: 35vh;
+    overflow-y: auto;
+  }
+
+  app-leaflet-map {
+    flex: 1 1 auto;
+    min-height: 280px;
+  }
+
+  app-dashboard-panel {
+    flex: 1 1 auto;
+    min-height: 180px;
   }
 }
 

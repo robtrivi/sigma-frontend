@@ -378,14 +378,14 @@
 @media (max-width: 1024px) {
   .dashboard-section {
     width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    max-height: 40vh;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    max-height: none;
+    overflow-y: visible;
   }
 
   .dashboard-card {
-    flex: 1;
-    min-width: 260px;
+    width: 100%;
     padding: 12px;
   }
 
@@ -432,6 +432,23 @@
   .color-box {
     width: 18px !important;
     height: 18px !important;
+  }
+}
+
+// Tablet Medium (768px - 1024px)
+@media (max-width: 1024px) and (min-width: 769px) {
+  .dashboard-section {
+    max-height: 35vh;
+    overflow-y: auto;
+  }
+
+  .dashboard-card {
+    // Ambos cards sin scroll individual - comparten scroll del contenedor
+    &:first-child,
+    &:nth-child(2) {
+      overflow: visible;
+      max-height: none;
+    }
   }
 }
 

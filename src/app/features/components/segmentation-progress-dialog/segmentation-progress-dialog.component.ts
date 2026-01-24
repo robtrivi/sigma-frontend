@@ -42,24 +42,24 @@ export class SegmentationProgressDialogComponent implements OnDestroy {
   private pollingInterval: any = null;
   private pollingIntervalMs = 500; // ✅ Aggressive polling: 500ms at start (reduced from 1000ms)
   private isCompleted = false; // ✅ Flag to freeze timer when completed
+  private initialStepAdded = false; // ✅ Flag to track if initial step was added
+  private initialStep: ProgressStep | null = null; // ✅ Store the initial step to keep it always
 
   progressPercentage = computed(() => {
     const prog = this.progress();
-    if (!prog) return 0;
+    if (!prog || prog.totalSteps === 0) return 0;
+    
+    // Contar cuántos pasos están completados
+    const completedSteps = prog.steps.filter(step => step.status === 'completed').length;
     
     // Si está completado, mostrar 100%
     if (prog.status === 'completed') {
       return 100;
     }
     
-    // Si está en error, mostrar el porcentaje del step donde falló
-    if (prog.status === 'error') {
-      return ((prog.currentStep + 1) / prog.totalSteps) * 100;
-    }
-    
-    // Si está en progreso, mostrar (currentStep + 0.5) para no llegar a 100%
-    // hasta que realmente termine
-    return ((prog.currentStep + 0.5) / prog.totalSteps) * 100;
+    // Mostrar el porcentaje basado en pasos completados
+    // Esto refleja el progreso real de lo que ya se ha terminado
+    return (completedSteps / prog.totalSteps) * 100;
   });
 
   isLoading = computed(() => {
@@ -113,7 +113,53 @@ export class SegmentationProgressDialogComponent implements OnDestroy {
     
     this.http.get<SegmentationProgress>(progressUrl).subscribe({
       next: (data) => {
-        this.progress.set(data);
+        // Get the current progress state
+        const currentProgress = this.progress();
+        const totalStepsFromCurrentProgress = currentProgress?.totalSteps || data.totalSteps;
+        
+        // If we haven't added the initial step yet
+        if (!this.initialStepAdded && currentProgress && 
+            currentProgress.steps.length === 1 && 
+            currentProgress.steps[0].name === 'Conectando al servidor') {
+          
+          // Store the initial step (keep as in-progress for now)
+          this.initialStep = { ...currentProgress.steps[0] };
+          
+          // Mark that we've added the initial step
+          this.initialStepAdded = true;
+          
+          // Combine: initial step + backend steps
+          const combinedSteps = [this.initialStep, ...data.steps];
+          
+          // Update progress with combined steps and keep the totalSteps from current progress
+          this.progress.set({
+            ...data,
+            currentStep: data.currentStep, // Keep backend's currentStep as is (0-indexed, relative to backend steps)
+            steps: combinedSteps,
+            totalSteps: totalStepsFromCurrentProgress
+          });
+        } else if (this.initialStepAdded && this.initialStep) {
+          // If we already have an initial step, always prepend it to the backend steps
+          const combinedSteps = [this.initialStep, ...data.steps];
+          
+          // Mark the initial step as completed when a backend step becomes in-progress or completed
+          const hasBackendStepStarted = data.steps.some(step => step.status === 'in-progress' || step.status === 'completed');
+          if (hasBackendStepStarted && this.initialStep.status !== 'completed') {
+            this.initialStep.status = 'completed';
+            this.initialStep.message = 'Conexión establecida';
+            combinedSteps[0] = this.initialStep;
+          }
+          
+          this.progress.set({
+            ...data,
+            currentStep: data.currentStep + 1, // Adjust currentStep to account for the initial step
+            steps: combinedSteps,
+            totalSteps: totalStepsFromCurrentProgress
+          });
+        } else {
+          // Normal case - just set the data as is (no initial step was added)
+          this.progress.set(data);
+        }
       },
       error: (error) => {
         console.error('Error fetching progress:', error);
@@ -195,11 +241,44 @@ export class SegmentationProgressDialogComponent implements OnDestroy {
 
   // Public method to start streaming
   startStreaming(sceneId: string): void {
+    const isNewScene = this.sceneId() !== sceneId;
+    
     this.sceneId.set(sceneId);
-    this.progress.set(null);
-    this.elapsedSeconds.set(0);
+    
+    // Only reset elapsed time if it's a new scene
+    if (isNewScene) {
+      this.elapsedSeconds.set(0);
+      this.stopTimer();
+      this.startTimer();
+    } else {
+      // Ensure timer is running if it's the same scene
+      if (!this.timerInterval) {
+        this.startTimer();
+      }
+    }
+    
     this.isCompleted = false; // ✅ Reset completion flag
-    this.startTimer();
+    this.initialStepAdded = false; // ✅ Reset initial step flag
+    this.initialStep = null; // ✅ Reset initial step storage
+    
+    // Set initial progress state with a connecting step
+    this.progress.set({
+      sceneId: sceneId,
+      status: 'in-progress',
+      currentStep: 0,
+      totalSteps: 7, // 1 initial step + 6 backend steps
+      steps: [
+        {
+          name: 'Conectando al servidor',
+          status: 'in-progress',
+          message: 'Estableciendo conexión con el servidor...',
+          timestamp: new Date().toISOString(),
+          error: ''
+        }
+      ],
+      errorMessage: '',
+      result: null
+    });
     
     // ✅ Aggressive polling at start
     this.pollingIntervalMs = 500;

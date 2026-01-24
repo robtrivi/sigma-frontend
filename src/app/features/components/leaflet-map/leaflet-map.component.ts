@@ -134,6 +134,16 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     private readonly classColorService: ClassColorService
   ) {}
 
+  /**
+   * Calcula el desplazamiento responsivo basado en el ancho de la pantalla
+   * Pantallas ≤ 1024px: sin desplazamiento (0px)
+   * Pantallas > 1024px: desplazamiento de 500px
+   */
+  private getResponsivePanOffset(): number {
+    const windowWidth = globalThis?.innerWidth || 0;
+    return windowWidth > 1024 ? 500 : 0;
+  }
+
   ngOnInit(): void {
     if (globalThis?.document) {
       this.fixLeafletIconPaths();
@@ -335,8 +345,8 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
           this.map.fitBounds(bounds, { padding: [50, 50] });
           // Desplazar la vista hacia arriba después de que fitBounds se complete
           this.map.once('moveend', () => {
-            // Desplazar hacia arriba (valor positivo = hacia arriba en pantalla)
-            this.map.panBy([0, 400], { animate: false });
+            // Desplazar hacia arriba (valor responsivo basado en tamaño de pantalla)
+            this.map.panBy([0, this.getResponsivePanOffset()], { animate: false });
           });
           this.maskCenteredOnce = true;
         }
@@ -397,8 +407,8 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       if (!this.maskCenteredOnce) {
         this.map.fitBounds(bounds, { padding: [50, 50] });
         this.map.once('moveend', () => {
-          // Desplazar hacia arriba (valor positivo = hacia arriba en pantalla)
-          this.map.panBy([0, 400], { animate: false });
+          // Desplazar hacia arriba (valor responsivo basado en tamaño de pantalla)
+          this.map.panBy([0, this.getResponsivePanOffset()], { animate: false });
         });
         this.maskCenteredOnce = true;
       }
@@ -447,8 +457,8 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         const group = new L.FeatureGroup(this.originalImageLayers);
         this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
         this.map.once('moveend', () => {
-          // Desplazar hacia arriba (valor positivo = hacia arriba en pantalla)
-          this.map.panBy([0, 400], { animate: false });
+          // Desplazar hacia arriba (valor responsivo basado en tamaño de pantalla)
+          this.map.panBy([0, this.getResponsivePanOffset()], { animate: false });
         });
         this.maskCenteredOnce = true;
       }
@@ -488,7 +498,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
           const bounds = (this.originalImageLayer as L.ImageOverlay).getBounds();
           this.map.fitBounds(bounds, { padding: [50, 50] });
           this.map.once('moveend', () => {
-            this.map.panBy([0, 400], { animate: false });
+            this.map.panBy([0, this.getResponsivePanOffset()], { animate: false });
           });
           this.maskCenteredOnce = true;
         }
@@ -519,7 +529,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
       const group = new L.FeatureGroup(this.maskLayers);
       this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
       this.map.once('moveend', () => {
-        this.map.panBy([0, 400], { animate: false });
+        this.map.panBy([0, this.getResponsivePanOffset()], { animate: false });
       });
       this.maskCenteredOnce = true;
     }
@@ -536,7 +546,7 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
         const group = new L.FeatureGroup(this.originalImageLayers);
         this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
         this.map.once('moveend', () => {
-          this.map.panBy([0, 400], { animate: false });
+          this.map.panBy([0, this.getResponsivePanOffset()], { animate: false });
         });
         this.maskCenteredOnce = true;
       }
@@ -784,8 +794,8 @@ export class LeafletMapComponent implements OnInit, OnDestroy, AfterViewInit, On
     const group = new L.FeatureGroup(this.maskLayers);
     this.map.fitBounds(group.getBounds(), { padding: [50, 50] });
     this.map.once('moveend', () => {
-      // Desplazar hacia arriba (valor positivo = hacia arriba en pantalla)
-      this.map.panBy([0, 400], { animate: false });
+      // Desplazar hacia arriba (valor responsivo basado en tamaño de pantalla)
+      this.map.panBy([0, this.getResponsivePanOffset()], { animate: false });
     });
     this.maskCenteredOnce = true;
   }
